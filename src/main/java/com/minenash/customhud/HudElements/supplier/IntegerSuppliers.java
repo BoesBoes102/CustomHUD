@@ -4,7 +4,6 @@ import com.minenash.customhud.ProfileManager;
 import com.minenash.customhud.complex.ComplexData;
 import com.minenash.customhud.errors.Errors;
 import com.minenash.customhud.mixin.accessors.WorldRendererAccess;
-import com.mojang.blaze3d.platform.GLX;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.ParticleGroup;
@@ -21,7 +20,7 @@ import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.NaturalSpawner;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import oshi.hardware.CentralProcessor;
@@ -192,7 +191,10 @@ public class IntegerSuppliers {
 
     public static final Supplier<Number> DISPLAY_WIDTH = () -> client.getWindow().getWidth();
     public static final Supplier<Number> DISPLAY_HEIGHT = () -> client.getWindow().getHeight();
-    public static final Supplier<Number> DISPLAY_REFRESH_RATE = () -> GLX._getRefreshRate(client.getWindow());
+    public static final Supplier<Number> DISPLAY_REFRESH_RATE = () -> {
+        var monitor = client.getWindow().findBestMonitor();
+        return monitor == null ? null : Math.round(monitor.currentMode().getRefreshRate());
+    };
     public static final Supplier<Number> PING = () -> Math.round(ComplexData.pingMetrics[0]);
     public static final Supplier<Number> LATENCY = () -> client.player.connection.getPlayerInfo(client.player.getUUID()).getLatency();
     public static final Supplier<Number> SOLAR_TIME = () -> client.level.getOverworldClockTime() % 24000;

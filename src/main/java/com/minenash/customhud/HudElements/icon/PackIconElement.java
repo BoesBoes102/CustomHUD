@@ -11,7 +11,7 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.resources.Identifier;
-import net.minecraft.server.packs.PackResources;
+import net.minecraft.server.packs.PackMetadataResources;
 import net.minecraft.server.packs.repository.Pack;
 import net.minecraft.server.packs.resources.IoSupplier;
 import net.minecraft.util.Util;
@@ -53,7 +53,7 @@ public class PackIconElement extends IconElement {
 
     private static final Identifier UNKNOWN_PACK = Identifier.parse("textures/misc/unknown_pack.png");
     public static Identifier loadPackIcon(TextureManager textureManager, Pack resourcePackProfile) {
-        try (PackResources resourcePack = resourcePackProfile.open()) {
+        try (PackMetadataResources resourcePack = resourcePackProfile.openMetadata()) {
             IoSupplier<InputStream> inputSupplier = resourcePack.getRootResource("pack.png");
             if (inputSupplier == null)
                 return UNKNOWN_PACK;

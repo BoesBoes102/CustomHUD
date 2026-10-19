@@ -5,7 +5,7 @@ import com.minenash.customhud.data.Toggle;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.Util;
+import com.mojang.blaze3d.Blaze3D;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -98,7 +98,7 @@ public class ProfileManager {
 //            if (Screen.hasShiftDown() && !MinecraftClient.IS_SYSTEM_MAC)
 //                EditorWindow.open(profile);
 //            else
-                new Thread(() -> Util.getPlatform().openFile(CustomHud.PROFILE_FOLDER.resolve(profile.name + ".txt").toFile())).start();
+                Blaze3D.openPath(CustomHud.PROFILE_FOLDER.resolve(profile.name + ".txt"));
 
     }
 

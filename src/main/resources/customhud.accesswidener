@@ -67,3 +67,4 @@ accessible	field	net/minecraft/world/item/ItemCooldowns	cooldowns	Ljava/util/Map
 accessible	field	net/minecraft/world/item/ItemCooldowns	tickCount	I
 accessible	class	net/minecraft/world/item/ItemCooldowns$CooldownInstance
 accessible	field	net/minecraft/client/renderer/LevelRenderer	levelRenderState	Lnet/minecraft/client/renderer/state/level/LevelRenderState;
+accessible	field	net/minecraft/world/level/levelgen/RandomState	router	Lnet/minecraft/world/level/levelgen/NoiseRouter;

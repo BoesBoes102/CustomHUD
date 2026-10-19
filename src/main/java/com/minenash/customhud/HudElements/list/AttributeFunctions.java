@@ -527,7 +527,8 @@ public class AttributeFunctions {
 
 
     public static SubtitleOverlay.SoundPlayedAt sound(Subtitle subtitle) {
-        return subtitle.getClosest(CLIENT.getSoundManager().getListenerTransform().position());
+        var sound = subtitle.getBestSubtitleCandidate(CLIENT.getSoundManager().getListenerTransform().position());
+        return sound != null ? sound : subtitle.playedAt.getLast();
     }
 
     public static int subtitle$getDirection(SubtitleOverlay.SoundPlayedAt sound) {

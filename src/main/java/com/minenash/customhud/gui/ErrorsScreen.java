@@ -18,7 +18,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
-import net.minecraft.util.Util;
+import com.mojang.blaze3d.Blaze3D;
+import java.net.URI;
 import java.util.Iterator;
 import java.util.List;
 
@@ -252,7 +253,7 @@ public class ErrorsScreen extends Screen {
             @Override
             public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
                 if (click.x() >= refX && click.x() <= refX + refLength)
-                    Util.getPlatform().openUri(error.type().link);
+                    Blaze3D.openUri(URI.create(error.type().link));
                 else if (expands && ErrorListWidget.this.getSelected() != this)
                     ErrorListWidget.this.setSelected(this);
                 else
