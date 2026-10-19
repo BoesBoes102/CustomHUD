@@ -17,20 +17,22 @@ import com.minenash.customhud.registry.ParseContext;
 import com.minenash.customhud.render.RenderPiece;
 import com.terraformersmc.modmenu.ModMenu;
 import com.terraformersmc.modmenu.util.mod.Mod;
-import net.minecraft.client.network.PlayerListEntry;
-import net.minecraft.enchantment.EnchantmentHelper;
-import net.minecraft.item.ItemConvertible;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
-import net.minecraft.village.TradeOffer;
-
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.trading.ItemCost;
+import net.minecraft.world.item.trading.MerchantOffer;
+import net.minecraft.world.level.ItemLike;
 
+import static com.minenash.customhud.CustomHud.CLIENT;
 import static com.minenash.customhud.HudElements.list.AttributeFunctions.*;
 import static com.minenash.customhud.HudElements.list.AttributeFunctions.ITEM_ATTR_MODIFIER_NAME;
 import static com.minenash.customhud.HudElements.list.ListSuppliers.*;
@@ -64,7 +66,7 @@ public class Attributers {
     public static final Attributer PLAYER = (pid, sup, name, flags, context) -> {
         if (name.startsWith("team:")) {
             String attr = name.substring(5);
-            Supplier sup2 = () -> ((PlayerListEntry) sup.get()).getScoreboardTeam();
+            Supplier sup2 = () -> ((PlayerInfo) sup.get()).getTeam();
             return TEAM2.get(pid, sup2, attr, flags, context);
         }
 
@@ -84,6 +86,23 @@ public class Attributers {
         default -> null;
     };};
 
+    public static final Attributer SUBTITLE_SOUND = (pid, sup, name, flags, context) -> switch (name) {
+        case "age" -> new Num(sup, SUBTITLE_SOUND_AGE, flags);
+        case "time" -> new Num(sup, SUBTITLE_SOUND_TIME, flags);
+        case "alpha" -> new Num(sup, SUBTITLE_SOUND_ALPHA, flags);
+        case "x" -> new Num(sup, SUBTITLE_SOUND_X, flags);
+        case "y" -> new Num(sup, SUBTITLE_SOUND_Y, flags);
+        case "z" -> new Num(sup, SUBTITLE_SOUND_Z, flags);
+        case "dist", "distance" -> new Num(sup, SUBTITLE_SOUND_DISTANCE, flags);
+
+        case "dir", "direction" -> new Str(sup, SUBTITLE_SOUND_DIRECTION);
+        case "left" -> new Bool(sup, SUBTITLE_SOUND_LEFT);
+        case "right" -> new Bool(sup, SUBTITLE_SOUND_RIGHT);
+        case "dir_yaw", "direction_yaw" -> new Num(sup, SUBTITLE_SOUND_DIRECTION_YAW, flags);
+        case "dir_pitch", "direction_pitch" -> new Num(sup, SUBTITLE_SOUND_DIRECTION_PITCH, flags);
+        default -> null;
+    };
+
     public static final Attributer SUBTITLE = (pid, sup, name, flags, context) -> switch (name) {
         case "", "id" -> new Id(sup, SUBTITLE_ID,flags);
         case "name" -> new Str(sup, SUBTITLE_NAME);
@@ -101,6 +120,8 @@ public class Attributers {
         case "right" -> new Bool(sup, SUBTITLE_RIGHT);
         case "dir_yaw", "direction_yaw" -> new Num(sup, SUBTITLE_DIRECTION_YAW, flags);
         case "dir_pitch", "direction_pitch" -> new Num(sup, SUBTITLE_DIRECTION_PITCH, flags);
+
+        case "sounds" -> new CreateListElement(sup, SUBTITLE_SOUNDS, SUBTITLE_SOUND, flags);
         default -> null;
     };
 
@@ -134,7 +155,6 @@ public class Attributers {
         case "max_level", "max_lvl" -> new Special(sup,ENCHANT_MAX_LEVEL);
         case "num", "number" -> new Num(sup,ENCHANT_NUM, flags);
         case "max_num", "max_number" -> new Num(sup,ENCHANT_MAX_NUM, flags);
-        case "rarity" -> new Str(sup,ENCHANT_RARITY);
         default -> null;
     };
 
@@ -150,7 +170,7 @@ public class Attributers {
         case "default_value" -> new Num(sup,ITEM_ATTR_VALUE_DEFAULT, flags);
         case "attribute_value","attr_value" -> new Num(sup,ITEM_ATTR_VALUE, flags);
         case "", "modifier_name","mod_name" -> new Str(sup,ITEM_ATTR_MODIFIER_NAME);
-        case "modifier_id","mod_id" -> new Str(sup,ITEM_ATTR_MODIFIER_ID);
+        case "modifier_id","mod_id" -> new Id<>(sup,ITEM_ATTR_MODIFIER_ID, flags);
         case "mod_amount","amount" -> new Num(sup,ITEM_ATTR_MODIFIER_VALUE, flags);
         case "op", "operation" -> new Str(sup,ITEM_ATTR_MODIFIER_OPERATION);
         case "op_name", "operation_name" -> new Str(sup,ITEM_ATTR_MODIFIER_OPERATION_NAME);
@@ -159,7 +179,7 @@ public class Attributers {
 
     public static final Attributer ITEM_CAN_X = (pid, sup, name, flags, context) -> switch (name) {
         case "name" -> new Str(sup,BLOCK_NAME);
-        case "", "id" -> new Id(sup,BLOCK_ID,flags);
+        case "", "id" -> new Id(sup,BLOCK_ID, flags);
         case "icon" -> new ItemConvertableIconElement(pid, sup, flags);
         default -> null;
     };
@@ -167,12 +187,16 @@ public class Attributers {
     public static Attributer ITEM2;
     public static final Attributer ITEM = (pid, sup, name, flags, context) -> {
         if (name.startsWith("enchant:"))
-            return VariableParser.attrElement(name, src -> Registries.ENCHANTMENT.get(Identifier.tryParse(src)), true,
+            return VariableParser.attrElement(name, src -> src, true,
                     (enchant) -> () -> {
+                        var registry = CLIENT.level.registryAccess().lookup(Registries.ENCHANTMENT);
+                        if (registry.isEmpty()) return null;
+                        var entry = registry.get().get(Identifier.tryParse(enchant));
+                        if (entry.isEmpty()) return null;
                         ItemStack stack = (ItemStack) sup.get();
                         if (stack.isEmpty()) return null;
-                        Integer lvl = EnchantmentHelper.get((ItemStack)sup.get()).get(enchant);
-                        return lvl == null ? null : Map.entry(enchant, lvl);
+                        int lvl = stack.getEnchantments().getLevel(entry.get());
+                        return lvl == 0 ? null : Map.entry(enchant, lvl);
                     },
                     ENCHANTMENT, ErrorType.UNKNOWN_EFFECT_ID, ErrorType.UNKNOWN_EFFECT_METHOD, context.profile(), context.line(), context.enabled(), name);
         return switch (name) {
@@ -182,6 +206,14 @@ public class Attributers {
             case "count" -> new NumBool(sup, ITEM_COUNT, ITEM_IS_NOT_EMPTY, flags);
             case "max_count" -> new NumBool(sup, ITEM_MAX_COUNT, ITEM_IS_STACKABLE, flags);
             case "inv_count" -> new NumBool(sup, ITEM_INV_COUNT, ITEM_HAS_MORE_OUT_OF_STACK, flags);
+
+
+
+            case "cooldown" -> new NumBool(sup, ITEM_COOLDOWN, ITEM_COOLING_DOWN, flags);
+            case "max_cooldown" -> new NumBool(sup, ITEM_MAX_COOLDOWN, ITEM_HAS_COOLDOWN, flags);
+            case "cooldown_per", "cooldown_percentage" -> new NumBool(sup, ITEM_COOLDOWN_PER, ITEM_COOLING_DOWN, flags);
+            case "cooling_down" -> new Bool(sup, ITEM_COOLING_DOWN);
+
             case "dur","durability" -> new NumBool(sup, ITEM_DURABILITY, ITEM_HAS_DURABILITY, flags);
             case "max_dur","max_durability" -> new NumBool(sup, ITEM_MAX_DURABILITY, ITEM_HAS_MAX_DURABILITY, flags);
             case "dur_per","durability_percentage" -> new NumBool(sup, ITEM_DURABILITY_PERCENT, ITEM_HAS_MAX_DURABILITY, flags);
@@ -190,7 +222,6 @@ public class Attributers {
             case "repair_cost" -> new Num(sup, ITEM_REPAIR_COST, flags);
             case "icon" -> new RichItemSupplierIconElement(pid, sup, flags, false);
             case "inv_count_icon" -> new RichItemSupplierIconElement(pid, sup, flags, true);
-            case "hide_flags" -> new Num(sup, ITEM_HIDE_FLAGS_NUM, flags);
             case "rarity" -> new Special(sup, ITEM_RARITY);
             case "armor_slot" -> new Special(sup, ITEM_ARMOR_SLOT);
 
@@ -199,8 +230,6 @@ public class Attributers {
             case "attributes", "attrs" -> new CreateListElement(sup, ITEM_ATTRIBUTES, ITEM_ATTRIBUTE_MODIFIER, flags);
             case "can_destroy" -> new CreateListElement(sup, ITEM_CAN_DESTROY, ITEM_CAN_X, flags);
             case "can_place_on" -> new CreateListElement(sup, ITEM_CAN_PLAY_ON, ITEM_CAN_X, flags);
-            case "info_shown" -> new CreateListElement(sup, ITEM_SHOWN, ITEM_INFO_INFO, flags);
-            case "info_hidden" -> new CreateListElement(sup, ITEM_HIDDEN, ITEM_INFO_INFO, flags);
             case "tags" -> new CreateListElement(sup, ITEM_TAGS, TAG, flags);
             case "items" -> new CreateListElement(sup, ITEM_ITEMS, ITEM2, flags);
             case "items_compact" -> new CreateListElement(sup, ITEM_ITEMS_COMPACT, ITEM2, flags);
@@ -210,8 +239,7 @@ public class Attributers {
     static { ITEM2 = ITEM; }
 
     public static final Attributer ATTRIBUTE_MODIFIER = (pid, sup, name, flags, context) -> switch (name) {
-        case "", "name" -> new Str(sup,ATTRIBUTE_MODIFIER_NAME);
-        case "id" -> new Str(sup,ATTRIBUTE_MODIFIER_ID);
+        case "", "name", "id" -> new Id(sup,ATTRIBUTE_MODIFIER_ID, flags);
         case "value" -> new Num(sup,ATTRIBUTE_MODIFIER_VALUE, flags);
         case "op", "operation" -> new Str(sup,ATTRIBUTE_MODIFIER_OPERATION);
         case "op_name", "operation_name" -> new Str(sup,ATTRIBUTE_MODIFIER_OPERATION_NAME);
@@ -306,10 +334,18 @@ public class Attributers {
     static {
         PROFILER_TIMING2 = PROFILER_TIMING;}
 
-    public static final Attributer MOD_AUTHOR = (pid, sup, name, flags, context) -> name.isEmpty() || name.equals("name") ? new Str(sup, DIRECT) : null;
-    public static final Attributer MOD_CONTRIBUTOR = (pid, sup, name, flags, context) -> name.isEmpty() || name.equals("name") ? new Str(sup, DIRECT) : null;
-    public static final Attributer MOD_CREDIT = (pid, sup, name, flags, context) -> name.isEmpty() || name.equals("name") ? new Str(sup, DIRECT) : null;
-    public static final Attributer MOD_LICENSE = (pid, sup, name, flags, context) -> name.isEmpty() || name.equals("name") ? new Str(sup, DIRECT) : null;
+    public static final Attributer MOD_AUTHOR = (pid, sup, name, flags, context) -> name.isEmpty() || name.equals("author") ? new Str(sup, DIRECT) : null;
+    public static final Attributer MOD_CONTRIBUTOR = (pid, sup, name, flags, context) -> switch (name) {
+        case "name", "" -> new Str(sup, MOD_C_ENTRY_NAME);
+        case "group" -> new Str(sup, MOD_C_ENTRY_KEY);
+        default -> null;
+    };
+    public static final Attributer MOD_CREDIT = (pid, sup, name, flags, context) -> switch (name) {
+        case "name", "" -> new Str(sup, MOD_C_ENTRY_NAME);
+        case "group" -> new Str(sup, MOD_C_ENTRY_KEY);
+        default -> null;
+    };
+    public static final Attributer MOD_LICENSE = (pid, sup, name, flags, context) -> name.isEmpty() || name.equals("license") ? new Str(sup, DIRECT) : null;
 
     public static final Attributer MOD_BADGE = (pid, sup, name, flags, context) -> switch (name) {
         case "", "name" -> new Str(sup, BADGE_NAME);
@@ -360,7 +396,12 @@ public class Attributers {
         case "","name" -> new Tex(sup, PACK_NAME);
         case "id" -> new Str(sup, PACK_ID);
         case "description", "desc" -> new Tex(sup, PACK_DESCRIPTION);
-        case "version" -> new Num(sup, PACK_VERSION, flags);
+        case "min", "min_version" -> new Str(sup, MIN_PACK_VERSION);
+        case "max", "max_version" -> new Str(sup, MAX_PACK_VERSION);
+        case "min_major", "min_version_major" -> new Num(sup, MIN_PACK_VERSION_MAJOR, flags);
+        case "min_minor", "min_version_minor" -> new Num(sup, MIN_PACK_VERSION_MINOR, flags);
+        case "max_major", "max_version_major" -> new Num(sup, MAX_PACK_VERSION_MAJOR, flags);
+        case "max_minor", "max_version_minor" -> new Num(sup, MAX_PACK_VERSION_MINOR, flags);
         case "always_enabled" -> new Bool(sup, PACK_ALWAYS_ENABLED);
         case "pinned" -> new Bool(sup, PACK_IS_PINNED);
         case "compatible" -> new Bool(sup, PACK_IS_COMPATIBLE);
@@ -386,17 +427,17 @@ public class Attributers {
             boolean isIcon = attr.equals("icon");
             Supplier sup2 = switch (name.substring(0, collinIndex)) {
                 case "first" -> isIcon ?
-                        () -> (Function<RenderPiece, ItemStack>) piece -> ((TradeOffer) (piece == null ? sup.get() : piece.value)).getAdjustedFirstBuyItem()
-                        : (Supplier<ItemStack>) () -> ((TradeOffer)sup.get()).getAdjustedFirstBuyItem();
+                        () -> (Function<RenderPiece, ItemStack>) piece -> ((MerchantOffer) (piece == null ? sup.get() : piece.value)).getCostA()
+                        : (Supplier<ItemStack>) () -> ((MerchantOffer)sup.get()).getCostA();
                 case "first_base" -> isIcon ?
-                        () -> (Function<RenderPiece, ItemStack>) piece -> ((TradeOffer) (piece == null ? sup.get() : piece.value)).getOriginalFirstBuyItem()
-                        : (Supplier<ItemStack>) () -> ((TradeOffer)sup.get()).getOriginalFirstBuyItem();
+                        () -> (Function<RenderPiece, ItemStack>) piece -> ((MerchantOffer) (piece == null ? sup.get() : piece.value)).getBaseCostA()
+                        : (Supplier<ItemStack>) () -> ((MerchantOffer)sup.get()).getBaseCostA();
                 case "second" -> isIcon ?
-                        () -> (Function<RenderPiece, ItemStack>) piece -> ((TradeOffer) (piece == null ? sup.get() : piece.value)).getSecondBuyItem()
-                        : (Supplier<ItemStack>) () -> ((TradeOffer)sup.get()).getSecondBuyItem();
+                        () -> (Function<RenderPiece, ItemStack>) piece -> ((MerchantOffer) (piece == null ? sup.get() : piece.value)).getCostB()
+                        : (Supplier<ItemStack>) () -> ((MerchantOffer)sup.get()).getCostB();
                 case "result" -> isIcon ?
-                        () -> (Function<RenderPiece, ItemStack>) piece -> ((TradeOffer) (piece == null ? sup.get() : piece.value)).getSellItem()
-                        : (Supplier<ItemStack>) () -> ((TradeOffer)sup.get()).getSellItem();
+                        () -> (Function<RenderPiece, ItemStack>) piece -> ((MerchantOffer) (piece == null ? sup.get() : piece.value)).getResult()
+                        : (Supplier<ItemStack>) () -> ((MerchantOffer)sup.get()).getResult();
                 default -> null;
             };
             if (sup2 != null)
@@ -418,11 +459,14 @@ public class Attributers {
             default -> null;
         };
     };
+    private static ItemStack secondItem(Optional<ItemCost> item) {
+        return item.isEmpty() ? new ItemStack(Items.AIR) : item.get().itemStack();
+    }
 
     public static final Attributer ITEM_CONVERTABLE_TAG_ENTRY = (pid, sup, name, flags, context) -> switch (name) {
         case "name" -> new Tex(sup, TAG_ENTRY_NAME);
         case "", "id" -> new Id(sup, TAG_ENTRY_ID,flags);
-        case "icon" -> new RichItemSupplierIconElement(pid, () -> new ItemStack(((ItemConvertible) sup.get()).asItem()), flags, false);
+        case "icon" -> new RichItemSupplierIconElement(pid, () -> new ItemStack(((ItemLike) sup.get()).asItem()), flags, false);
         default -> null;
     };
 
@@ -440,7 +484,6 @@ public class Attributers {
     public static final Map<Attributer, String> DEFAULT_PREFIX = new HashMap<>();
     static {
         ATTRIBUTER_MAP.put(STATUS_EFFECTS, EFFECT);
-        ATTRIBUTER_MAP.put(STATUS_EFFECTS_POSITIVE, EFFECT);
         ATTRIBUTER_MAP.put(STATUS_EFFECTS_POSITIVE, EFFECT);
         ATTRIBUTER_MAP.put(STATUS_EFFECTS_NEGATIVE, EFFECT);
         ATTRIBUTER_MAP.put(STATUS_EFFECTS_NEUTRAL, EFFECT);
@@ -479,10 +522,12 @@ public class Attributers {
         ATTRIBUTER_MAP.put(RECORDS, RECORD);
         ATTRIBUTER_MAP.put(TARGET_VILLAGER_OFFERS, OFFER);
         ATTRIBUTER_MAP.put(CHAT_MESSAGES, CHAT_MESSAGE);
+        ATTRIBUTER_MAP.put(ON_CHAT_MESSAGE, CHAT_MESSAGE);
 
         DEFAULT_PREFIX.put(EFFECT, "e");
         DEFAULT_PREFIX.put(PLAYER, "p");
         DEFAULT_PREFIX.put(SUBTITLE, "s");
+        DEFAULT_PREFIX.put(SUBTITLE_SOUND, "ss");
         DEFAULT_PREFIX.put(BLOCK_PROPERTY, "p");
         DEFAULT_PREFIX.put(RECEIVED_POWER, "r");
         DEFAULT_PREFIX.put(TAG, "t");

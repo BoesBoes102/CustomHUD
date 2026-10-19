@@ -3,18 +3,19 @@ package com.minenash.customhud.HudElements.icon;
 import com.minenash.customhud.CustomHud;
 import com.minenash.customhud.data.Flags;
 import com.minenash.customhud.render.RenderPiece;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.resource.Resource;
-import net.minecraft.util.Identifier;
-
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.NativeImage;
 import java.io.IOException;
 import java.util.Optional;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.packs.resources.Resource;
 
 public class SimpleTextureIconElement extends IconElement {
-    private static final MinecraftClient client = MinecraftClient.getInstance();
-    private static final Identifier TEXTURE_NOT_FOUND = new Identifier("textures/item/barrier.png");
+    private static final Minecraft client = Minecraft.getInstance();
+    private static final Identifier TEXTURE_NOT_FOUND = Identifier.parse("textures/item/barrier.png");
 
     private final Identifier texture;
     private final int textureWidth;
@@ -23,18 +24,20 @@ public class SimpleTextureIconElement extends IconElement {
     private final int height;
     private final int yOffset;
     private final int textWidth;
+    private final RenderPipeline pipeline;
 
     private final boolean iconAvailable;
 
 
-    public SimpleTextureIconElement(Identifier texture, Flags flags) {
+    public SimpleTextureIconElement(Identifier texture, boolean crosshair, Flags flags) {
         super(flags, 0);
+        this.pipeline = crosshair ? RenderPipelines.CROSSHAIR : RenderPipelines.GUI_TEXTURED;
 
         NativeImage img = null;
         try {
             Optional<Resource> resource = client.getResourceManager().getResource(texture);
             if (resource.isPresent())
-                img = NativeImage.read(resource.get().getInputStream());
+                img = NativeImage.read(resource.get().open());
         }
         catch (IOException e) { CustomHud.LOGGER.catching(e); }
 
@@ -72,14 +75,14 @@ public class SimpleTextureIconElement extends IconElement {
     }
 
     @Override
-    public void render(DrawContext context, RenderPiece piece) {
+    public void render(GuiGraphicsExtractor context, RenderPiece piece) {
         if (width == 0)
             return;
-        context.getMatrices().push();
-        context.getMatrices().translate(piece.x+shiftX, piece.y+shiftY-yOffset-2, 0);
-        rotate(context.getMatrices(), width, height);
-        context.drawTexture(texture, 0, 0, width, height, 0, 0, textureWidth, textureHeight, textureWidth, textureHeight);
-        context.getMatrices().pop();
+        context.pose().pushMatrix();
+        context.pose().translate(piece.x+shiftX, piece.y+shiftY-yOffset-2);
+        rotate(context.pose(), width, height);
+        context.blit(pipeline, texture, 0, 0, 0, 0, width, height, textureWidth, textureHeight, textureWidth, textureHeight);
+        context.pose().popMatrix();
     }
 
 

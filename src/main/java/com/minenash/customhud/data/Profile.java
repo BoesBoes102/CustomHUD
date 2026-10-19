@@ -1,12 +1,15 @@
 package com.minenash.customhud.data;
 
 import com.minenash.customhud.CustomHud;
+import com.minenash.customhud.HudElements.list.ListProvider;
 import com.minenash.customhud.complex.ComplexData;
 import com.minenash.customhud.HudElements.functional.FunctionalElement;
+import com.minenash.customhud.conditionals.ExpressionParser;
+import com.minenash.customhud.conditionals.Operation;
 import com.minenash.customhud.errors.ErrorType;
 import com.minenash.customhud.errors.Errors;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.KeyMapping;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
@@ -23,10 +26,10 @@ public class Profile {
 
     public String name;
     public LocalDateTime updatedDateTime;
-    public KeyBinding keyBinding;
+    public KeyMapping keyBinding;
     public boolean cycle = true;
 
-    public static final Pattern SECTION_DECORATION_PATTERN = Pattern.compile("== ?section: ?(topleft|topcenter|topright|centerleft|centercenter|centerright|bottomleft|bottomcenter|bottomright) ?(?:, ?([-+]?\\d+)?)? ?(?:, ?([-+]?\\d+)?)? ?(?:, ?(true|false)?)? ?(?:, ?(-?\\d+|fit|max)?)? ?(?:, ?(left|right|center)?)? ?==");
+    public static final Pattern SECTION_DECORATION_PATTERN = Pattern.compile("== ?section: ?(topleft|topcenter|topright|centerleft|centercenter|centerright|bottomleft|bottomcenter|bottomright) ?(?:, ?([^,]*)?)? ?(?:, ?([^,]*)?)? ?(?:, ?(true|false)?)? ?(?:, ?(-?\\d+|fit|max)?)? ?(?:, ?(left|right|center)?)? ?==");
     private static final Pattern TARGET_RANGE_FLAG_PATTERN = Pattern.compile("== ?targetrange: ?(\\d+|max) ?==");
     private static final Pattern WHEN_HUD_HIDDEN = Pattern.compile("== ?whenhudhidden?: ?(show|showifscreen|hide) ?==");
     private static final Pattern CROSSHAIR_PATTERN = Pattern.compile("== ?crosshair: ?(.*) ?==");
@@ -55,6 +58,11 @@ public class Profile {
     public Map<String, Double> numValues = new LinkedHashMap<>();
     public Map<String, String> strValues = new LinkedHashMap<>();
     public Map<String, Macro> macros = new LinkedHashMap<>();
+    public Map<String, ListProvider.EventListProvider<?>> listEvents = new LinkedHashMap<>(); // Registered
+    public HashSet<String> boolEvents = new HashSet<>(); // Just putted, not registered
+
+    public Profile() { boolEvents.add("load"); }
+
 
     private MultiLineStacker stacker = new MultiLineStacker();
 
@@ -62,7 +70,7 @@ public class Profile {
         Profile p = new Profile();
         p.name = name;
         p.updatedDateTime = LocalDateTime.now();
-        p.keyBinding = new KeyBinding("custom_hud." + name, GLFW.GLFW_KEY_UNKNOWN, "Toggles");
+        p.keyBinding = new KeyMapping("custom_hud." + name, GLFW.GLFW_KEY_UNKNOWN, CustomHud.TOGGLES_KB_CAT);
         return p;
     }
 
@@ -86,7 +94,7 @@ public class Profile {
         }
 
         if (profile != null)
-            profile.keyBinding = new KeyBinding("custom_hud." + profileName, GLFW.GLFW_KEY_UNKNOWN, "Toggles");
+            profile.keyBinding = new KeyMapping("custom_hud." + profileName, GLFW.GLFW_KEY_UNKNOWN, CustomHud.TOGGLES_KB_CAT);
         return profile;
     }
 
@@ -194,8 +202,8 @@ public class Profile {
                     default -> null;
                 };
 
-                section.xOffset = matcher.group(2) != null && !matcher.group(2).isBlank() ? Integer.parseInt(matcher.group(2)) : 0;
-                section.yOffset = matcher.group(3) != null && !matcher.group(3).isBlank() ? Integer.parseInt(matcher.group(3)) : 0;
+                section.xOffset = matcher.group(2) != null && !matcher.group(2).isBlank() ? ExpressionParser.parseExpression(matcher.group(2), line, profile, i, profile.enabled, profile.stacker.listProviders, false) : new Operation.Literal(0);
+                section.yOffset = matcher.group(3) != null && !matcher.group(3).isBlank() ? ExpressionParser.parseExpression(matcher.group(3), line, profile, i, profile.enabled, profile.stacker.listProviders, false) : new Operation.Literal(0);
                 section.hideOnChat = matcher.group(3) != null && !matcher.group(3).isBlank() && Boolean.parseBoolean(matcher.group(4));
 
                 String width = matcher.group(5);

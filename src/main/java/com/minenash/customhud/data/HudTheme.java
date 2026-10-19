@@ -2,10 +2,10 @@ package com.minenash.customhud.data;
 
 import com.minenash.customhud.errors.ErrorType;
 import com.minenash.customhud.errors.Errors;
-import net.minecraft.util.Identifier;
-
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import net.minecraft.network.chat.FontDescription;
+import net.minecraft.resources.Identifier;
 
 import static com.minenash.customhud.CustomHud.CLIENT;
 
@@ -16,7 +16,7 @@ public class HudTheme {
     public int bgColor = 0x44000000;
     public CHFormatting fgColor = new CHFormatting().color(0xffffffff,0xffffffff);
     public int lineSpacing = 2;
-    public Identifier font = null;
+    public FontDescription font = null;
     public boolean textShadow = true;
     public boolean persistentFormatting = false;
 
@@ -146,7 +146,7 @@ public class HudTheme {
         }
 
         else if (( matcher = FONT_FLAG_PATTERN.matcher(line) ).matches())
-            font = new Identifier(matcher.group(1));
+            font = new FontDescription.Resource(Identifier.parse(matcher.group(1)));
 
         else if (( matcher = TEXT_SHADOW_FLAG_PATTERN.matcher(line) ).matches())
             textShadow = Boolean.parseBoolean(matcher.group(1));
@@ -207,15 +207,15 @@ public class HudTheme {
     public float getScale() {
         if (scaleMethod == ScaleMethod.DIRECT)
             return scale;
-        float gui = (float) CLIENT.getWindow().getScaleFactor();
+        float gui = (float) CLIENT.getWindow().getGuiScale();
         float target = scaleMethod == ScaleMethod.GUI ? scale : gui + scale;
         return target / gui;
     }
-    public double getTargetGuiScale() {
+    public int getTargetGuiScale() {
         if (hudScale == null)
-            return CLIENT.getWindow().getScaleFactor();
-        int gS = hudScaleRelative ? CLIENT.options.getGuiScale().getValue() + hudScale : hudScale;
-        return CLIENT.forcesUnicodeFont() && gS % 2 != 0 ? gS+1 : gS;
+            return CLIENT.getWindow().getGuiScale();
+        int gS = hudScaleRelative ? CLIENT.options.guiScale().get() + hudScale : hudScale;
+        return CLIENT.isEnforceUnicode() && gS % 2 != 0 ? gS+1 : gS;
     }
 
     public static CHFormatting parseHexNumber(String str) {

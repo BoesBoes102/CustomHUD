@@ -1,15 +1,13 @@
 package com.minenash.customhud.HudElements.icon;
 
-import com.minenash.customhud.HudElements.list.ListProvider;
 import com.minenash.customhud.data.Flags;
 import com.minenash.customhud.HudElements.functional.FunctionalElement;
 import com.minenash.customhud.render.RenderPiece;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.item.ItemStack;
-import org.joml.Quaternionf;
+import org.joml.Matrix3x2fStack;
 
 import java.util.UUID;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.world.item.ItemStack;
 
 public abstract class IconElement extends FunctionalElement {
 
@@ -17,8 +15,7 @@ public abstract class IconElement extends FunctionalElement {
     protected final int shiftX;
     protected final int shiftY;
     protected final int width;
-    protected final Quaternionf rotation;
-    protected final Quaternionf rotationInverse;
+    protected final float rotation;
     protected final boolean referenceCorner;
     protected UUID providerID = null;
 
@@ -27,12 +24,11 @@ public abstract class IconElement extends FunctionalElement {
         shiftX = flags.iconShiftX;
         shiftY = flags.iconShiftY;
         width = (int) Math.ceil( flags.iconWidth != -1 ? flags.iconWidth : defaultWidth * scale);
-        rotation = new Quaternionf().rotationZ(flags.rotation);
-        rotationInverse = new Quaternionf().rotationZ(-flags.rotation);
+        rotation = flags.rotation;
         referenceCorner = flags.iconReferenceCorner;
     }
 
-    public abstract void render(DrawContext context, RenderPiece piece);
+    public abstract void render(GuiGraphicsExtractor context, RenderPiece piece);
     public int getTextWidth() {
         return width;
     };
@@ -43,25 +39,25 @@ public abstract class IconElement extends FunctionalElement {
         return "\uFFFE";
     }
 
-    protected void rotate(MatrixStack matrices, float renderWidth, float renderHeight) {
-        matrices.translate(renderWidth/2, renderHeight/2, 0);
-        matrices.multiply(rotation);
-        matrices.translate(-renderWidth/2, -renderHeight/2, 0);
+    protected void rotate(Matrix3x2fStack matrices, float renderWidth, float renderHeight) {
+        matrices.translate(renderWidth/2, renderHeight/2);
+        matrices.rotate(this.rotation);
+        matrices.translate(-renderWidth/2, -renderHeight/2);
     }
 
-    public void renderItemStack(DrawContext context, int x, int y, ItemStack stack, boolean fitInLine) {
-        MatrixStack matrices = context.getMatrices();
-        matrices.push();
-        matrices.translate(x + shiftX, y + shiftY - 2, 0);
+    public void renderItemStack(GuiGraphicsExtractor context, int x, int y, ItemStack stack, boolean fitInLine) {
+        Matrix3x2fStack matrices = context.pose();
+        matrices.pushMatrix();
+        matrices.translate(x + shiftX, y + shiftY - 2);
         int size = fitInLine ? 11 : 16;
         if (!referenceCorner)
-            matrices.translate(0, -(size*scale-11)/2, 0);
-        matrices.scale(size/16F * scale, size/16F * scale, 1);
+            matrices.translate(0, -(size*scale-11)/2);
+        matrices.scale(size/16F * scale, size/16F * scale);
         rotate(matrices, 16, 16);
         rotate(matrices, 16, 16);
 
-        context.drawItem(stack, 0, 0);
-        matrices.pop();
+        context.item(stack, 0, 0);
+        matrices.popMatrix();
 
     }
 

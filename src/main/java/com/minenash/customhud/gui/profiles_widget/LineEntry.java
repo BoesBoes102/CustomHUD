@@ -1,45 +1,40 @@
 package com.minenash.customhud.gui.profiles_widget;
 
 import com.minenash.customhud.gui.NewConfigScreen.Mode;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.gui.Selectable;
-import net.minecraft.client.gui.tooltip.Tooltip;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.ElementListWidget;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-
-import java.util.Collections;
 import java.util.List;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.ContainerObjectSelectionList;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.narration.NarratableEntry;
+import net.minecraft.network.chat.Component;
 
-import static com.minenash.customhud.CustomHud.CLIENT;
-
-public abstract class LineEntry extends ElementListWidget.Entry<LineEntry> {
+public abstract class LineEntry extends ContainerObjectSelectionList.Entry<LineEntry> {
     public void update() {}
 
-    protected void posAndRender(DrawContext context, int mouseX, int mouseY, float delta, int x, int y, int width, ButtonWidget widget, int xOffset) {
+    protected void posAndRender(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta, int x, int y, int width, Button widget, int xOffset) {
         widget.setX(x + (xOffset < 0 ? width + xOffset : xOffset + 16));
         widget.setY(y);
-        widget.render(context, mouseX, mouseY, delta);
+        widget.extractRenderState(context, mouseX, mouseY, delta);
     }
 
-    protected static ButtonWidget button(String text, int width, ButtonWidget.PressAction action) {
-        return ButtonWidget.builder(Text.literal(text), action).dimensions(0, 0, width, 16).build();
+    protected static Button button(String text, int width, Button.OnPress action) {
+        return Button.builder(Component.literal(text), action).bounds(0, 0, width, 16).build();
     }
-    protected static ButtonWidget button(String text, String tooltip, int width, ButtonWidget.PressAction action) {
-        return ButtonWidget.builder(Text.literal(text), action).dimensions(0, 0, width, 16)
-                .tooltip(Tooltip.of(Text.literal(tooltip))).build();
+    protected static Button button(String text, String tooltip, int width, Button.OnPress action) {
+        return Button.builder(Component.literal(text), action).bounds(0, 0, width, 16)
+                .tooltip(Tooltip.create(Component.literal(tooltip))).build();
     }
 
 
     public static class NewProfile extends LineEntry {
 
         private final ProfileLinesWidget parent;
-        private final ButtonWidget newProfile;
-        private final ButtonWidget reorderProfiles;
-        public final ButtonWidget deleteProfiles;
-        private final ButtonWidget deleteDone;
+        private final Button newProfile;
+        private final Button reorderProfiles;
+        public final Button deleteProfiles;
+        private final Button deleteDone;
 
         public NewProfile(ProfileLinesWidget parent) {
             this.parent = parent;
@@ -54,24 +49,27 @@ public abstract class LineEntry extends ElementListWidget.Entry<LineEntry> {
         }
 
         @Override
-        public void render(DrawContext context, int index, int y, int x, int eWidth, int eHeight, int mX, int mY, boolean hovered, float delta) {
+        public void extractContent(GuiGraphicsExtractor context, int mX, int mY, boolean hovered, float delta) {
+            int x = getContentX();
+            int y = getContentY();
+            int width = getContentWidth();
             if (parent.screen.mode != Mode.NORMAL)
-                posAndRender(context, mX, mY, delta, x, y, eWidth, deleteDone, 2);
+                posAndRender(context, mX, mY, delta, x, y, width, deleteDone, 2);
             else {
-                posAndRender(context, mX, mY, delta, x, y, eWidth, newProfile, 2);
-                posAndRender(context, mX, mY, delta, x, y, eWidth, reorderProfiles, 2 + 50);
-                posAndRender(context, mX, mY, delta, x, y, eWidth, deleteProfiles, 2 + 50 + 74);
+                posAndRender(context, mX, mY, delta, x, y, width, newProfile, 2);
+                posAndRender(context, mX, mY, delta, x, y, width, reorderProfiles, 2 + 50);
+                posAndRender(context, mX, mY, delta, x, y, width, deleteProfiles, 2 + 50 + 74);
             }
         }
 
         @Override
-        public List<? extends Selectable> selectableChildren() {
+        public List<? extends NarratableEntry> narratables() {
             if (parent.screen.mode != Mode.NORMAL)
                 return List.of(deleteDone);
             return List.of(newProfile, reorderProfiles, deleteProfiles);
         }
         @Override
-        public List<? extends Element> children() {
+        public List<? extends GuiEventListener> children() {
             if (parent.screen.mode != Mode.NORMAL)
                 return List.of(deleteDone);
             return List.of(newProfile, reorderProfiles, deleteProfiles);

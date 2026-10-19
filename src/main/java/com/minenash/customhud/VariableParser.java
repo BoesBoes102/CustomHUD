@@ -5,6 +5,8 @@ import com.minenash.customhud.HudElements.functional.GetValueElement;
 import com.minenash.customhud.HudElements.functional.SetValueElement;
 import com.minenash.customhud.HudElements.list.*;
 import com.minenash.customhud.HudElements.functional.FunctionalElement;
+import com.minenash.customhud.HudElements.functional.FunctionalElement.CreateListElement;
+import com.minenash.customhud.HudElements.functional.FunctionalElement.IgnoreErrorElement;
 import com.minenash.customhud.HudElements.interfaces.HudElement;
 import com.minenash.customhud.HudElements.icon.*;
 import com.minenash.customhud.HudElements.list.Attributers.Attributer;
@@ -15,6 +17,7 @@ import com.minenash.customhud.HudElements.text.ActionbarMsgElement;
 import com.minenash.customhud.HudElements.text.TextSupplierElement;
 import com.minenash.customhud.HudElements.text.TitleMsgElement;
 import com.minenash.customhud.complex.ComplexData;
+import com.minenash.customhud.complex.VelocityTracker;
 import com.minenash.customhud.conditionals.ExpressionParser;
 import com.minenash.customhud.conditionals.Operation;
 import com.minenash.customhud.conditionals.SudoElements;
@@ -23,26 +26,25 @@ import com.minenash.customhud.errors.ErrorType;
 import com.minenash.customhud.errors.Errors;
 import com.minenash.customhud.registry.CustomHudRegistry;
 import com.minenash.customhud.registry.ParseContext;
+import com.mojang.blaze3d.platform.InputConstants;
 import com.terraformersmc.modmenu.ModMenu;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.GameOptions;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.texture.SpriteAtlasTexture;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.Registry;
-import net.minecraft.scoreboard.ScoreHolder;
-import net.minecraft.scoreboard.ScoreboardObjective;
-import net.minecraft.stat.StatType;
-import net.minecraft.stat.Stats;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.InvalidIdentifierException;
-import net.minecraft.util.Pair;
+import net.minecraft.IdentifierException;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Options;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.stats.StatType;
+import net.minecraft.stats.Stats;
+import com.minenash.customhud.util.Tuple;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.scores.Objective;
+import net.minecraft.world.scores.ScoreHolder;
 import org.lwjgl.glfw.GLFW;
 
 import java.text.SimpleDateFormat;
@@ -79,6 +81,7 @@ public class VariableParser {
     private static final Pattern ITEM_VARIABLE_PATTERN = Pattern.compile("([\\w.-]*)(?::?([\\w.: /|-]*))?.*");
     private static final Pattern SPACE_STR_PATTERN = Pattern.compile("\"(.*)\"");
     private static final Pattern IS_LIST_PATTERN = Pattern.compile("([\\w\\s:-]+),\\s*\".*");
+    private static final Pattern VELOCITY_PATTERN = Pattern.compile("(_[xyz]{1,3})?(_kph|_mph)?");
 
     public static List<HudElement> addElements(String str, Profile profile, int debugLine, ComplexData.Enabled enabled, boolean line, ListProviderSet listProviders) {
 //        System.out.println("[Line " + debugLine+ "] '" + id + "'");
@@ -436,15 +439,18 @@ public class VariableParser {
             }
         }
 
-        if (part.startsWith("icon:")) {
+        boolean crosshair = part.startsWith("crosshair:");
+        if (crosshair || part.startsWith("icon:")) {
             part = part.substring(part.indexOf(':')+1);
             String[] flagParts = part.split(" ");
             String main = flagParts[0];
 
-            Item item = Registries.ITEM.get(Identifier.tryParse(main));
-            if (item != Items.AIR) {
-                Flags flags = Flags.parse(profile.name, debugLine, flagParts);
-                return Flags.wrap(new ItemIconElement(new ItemStack(item), flags), flags);
+            if (!crosshair) {
+                Item item = BuiltInRegistries.ITEM.getValue(Identifier.tryParse(main));
+                if (item != Items.AIR) {
+                    Flags flags = Flags.parse(profile.name, debugLine, flagParts);
+                    return Flags.wrap(new ItemIconElement(new ItemStack(item), flags), flags);
+                }
             }
 
             if (!part.contains(",")) {
@@ -455,7 +461,7 @@ public class VariableParser {
                     return null;
                 }
                 Flags flags = Flags.parse(profile.name, debugLine, flagParts);
-                SimpleTextureIconElement element = new SimpleTextureIconElement(id, flags);
+                SimpleTextureIconElement element = new SimpleTextureIconElement(id, crosshair, flags);
                 if (element.isIconAvailable())
                     return Flags.wrap(element, flags);
                 Errors.addError(profile.name, debugLine, original, ErrorType.UNKNOWN_ICON, id.toString());
@@ -485,7 +491,7 @@ public class VariableParser {
 
             Flags flags = Flags.parse(profile.name, debugLine, mainParts);
             if (matcher.group(2) != null && !matcher.group(2).isEmpty() && u == null && v == null && w == null && h == null && width == null && height == null) {
-                SimpleTextureIconElement element = new SimpleTextureIconElement(id, flags);
+                SimpleTextureIconElement element = new SimpleTextureIconElement(id, crosshair, flags);
                 if (element.isIconAvailable())
                     return Flags.wrap(element, flags);
                 Errors.addError(profile.name, debugLine, original, ErrorType.UNKNOWN_ICON, id.toString());
@@ -493,11 +499,47 @@ public class VariableParser {
             }
 
 
-            NewTextureIconElement element = new NewTextureIconElement(id, u, v, w, h, width, height, flags);
+            NewTextureIconElement element = new NewTextureIconElement(id, u, v, w, h, width, height, crosshair, flags);
             if (element.isIconAvailable())
                 return element;
             Errors.addError(profile.name, debugLine, original, ErrorType.UNKNOWN_ICON, id.toString());
             return null;
+        }
+
+
+        if (part.startsWith("velocity")) {
+            part = part.substring(8);
+
+            int openBrace = part.indexOf('[');
+            int closeBrace = part.lastIndexOf(']');
+            int flagStart = closeBrace != -1 ? closeBrace+1 : part.indexOf(' ');
+            int mainEnd = openBrace != -1 ? openBrace : flagStart != -1 ? flagStart : part.length();
+
+            String main = part.substring(0, mainEnd);
+            Matcher matcher = VELOCITY_PATTERN.matcher(main);
+            if (!matcher.matches()) {
+                Errors.addError(profile.name, debugLine, original, ErrorType.MALFORMED_VELOCITY, main);
+                return null;
+            }
+            String tracks = matcher.group(1) == null ? "" : matcher.group(1);
+            double conversion = matcher.group(2) == null ? 1 : matcher.group(2).equals("_kph") ? 3.6 : /*_mph*/ VelocityTracker.BPS_TO_MPH;
+
+            Operation smoothing = new Operation.Literal(0);
+            if (closeBrace != -1 && closeBrace > openBrace) {
+                List<String> parts = partitionConditional(part.substring(openBrace+1, closeBrace));
+                if (parts.size() != 1) {
+                    Errors.addError(profile.name, debugLine, original, ErrorType.MALFORMED_VELOCITY_SMOOTHING, "Expected 1 arg, found " + parts.size());
+                    return null;
+                }
+                smoothing = ExpressionParser.parseExpression(parts.get(0), original, profile, debugLine, enabled, listProviders, false);
+            }
+
+            Flags flags = Flags.parse(profile.name, debugLine, flagStart == -1 || flagStart >= part.length() ? new String[0] : part.substring(flagStart).split(" "));
+
+            VelocityTracker tracker = new VelocityTracker(smoothing, tracks.contains("x"), tracks.contains("y"), tracks.contains("z"));
+            enabled.velocityTrackers.add(tracker);
+
+            return Flags.wrap(new NumberSupplierElement(NumberSupplierElement.of(() -> tracker.velocity * conversion, 1 ), flags), flags);
         }
 
         el = listOnlyElement(part, profile, debugLine, enabled, original, listProviders, (p) -> {
@@ -507,11 +549,11 @@ public class VariableParser {
             ListProvider provider = null;
 
             if (p.startsWith("itag:") || p.startsWith("item_tag:")) {
-                provider = ListSuppliers.TAG_ENTRIES(Registries.ITEM, value);
+                provider = ListSuppliers.TAG_ENTRIES(BuiltInRegistries.ITEM, value);
                 ATTRIBUTER_MAP.put(provider, ITEM_CONVERTABLE_TAG_ENTRY);
             }
             else if (p.startsWith("btag:") || p.startsWith("block_tag:")) {
-                provider = ListSuppliers.TAG_ENTRIES(Registries.BLOCK, value);
+                provider = ListSuppliers.TAG_ENTRIES(BuiltInRegistries.BLOCK, value);
                 ATTRIBUTER_MAP.put(provider, ITEM_CONVERTABLE_TAG_ENTRY);
             }
             else if (p.startsWith("score:") && p.indexOf(':', 6) == -1) {
@@ -555,42 +597,42 @@ public class VariableParser {
             String objective = part.substring(collinIndex+1);
 
             return Flags.wrap(new NumberSupplierElement(() -> {
-                ScoreboardObjective obj = scoreboard().getNullableObjective(objective);
+                Objective obj = scoreboard().getObjective(objective);
                 if (obj == null) return null;
-                var score = scoreboard().getScore(ScoreHolder.fromName(player), obj);
-                return score == null ? 0 : score.getScore();
+                var score = scoreboard().getPlayerScoreInfo(ScoreHolder.forNameOnly(player), obj);
+                return score == null ? 0 : score.value();
             }, flags), flags);
         }
 
         if (part.startsWith("pscore:") || part.startsWith("player_score:")) {
             String p = part.substring(part.indexOf(':')+1);
             return Flags.wrap(new NumberSupplierElement(() -> {
-                ScoreboardObjective obj = scoreboard().getNullableObjective(p);
+                Objective obj = scoreboard().getObjective(p);
                 if (obj == null) return null;
-                var score = scoreboard().getScore(ScoreHolder.fromProfile(CLIENT.player.getGameProfile()), obj);
-                return score == null ? 0 : score.getScore();
+                var score = scoreboard().getPlayerScoreInfo(ScoreHolder.fromGameProfile(CLIENT.player.getGameProfile()), obj);
+                return score == null ? 0 : score.value();
             }, flags), flags);
         }
 
         if (part.startsWith("stat:")) {
             String stat = part.substring(5);
 
-            HudElement element = stat("mined:",   Stats.MINED,   Registries.BLOCK, stat, flags, enabled);
-            if (element == null) element = stat("crafted:", Stats.CRAFTED, Registries.ITEM,  stat, flags, enabled);
-            if (element == null) element = stat("used:",    Stats.USED,    Registries.ITEM,  stat, flags, enabled);
-            if (element == null) element = stat("broken:",  Stats.BROKEN,  Registries.ITEM,  stat, flags, enabled);
-            if (element == null) element = stat("dropped:", Stats.DROPPED, Registries.ITEM,  stat, flags, enabled);
-            if (element == null) element = stat("picked_up:", Stats.PICKED_UP, Registries.ITEM, stat, flags, enabled);
-            if (element == null) element = stat("killed:",    Stats.KILLED,    Registries.ENTITY_TYPE, stat, flags, enabled);
-            if (element == null) element = stat("killed_by:", Stats.KILLED_BY, Registries.ENTITY_TYPE, stat, flags, enabled);
+            HudElement element = stat("mined:",   Stats.BLOCK_MINED,   BuiltInRegistries.BLOCK, stat, flags, enabled);
+            if (element == null) element = stat("crafted:", Stats.ITEM_CRAFTED, BuiltInRegistries.ITEM,  stat, flags, enabled);
+            if (element == null) element = stat("used:",    Stats.ITEM_USED,    BuiltInRegistries.ITEM,  stat, flags, enabled);
+            if (element == null) element = stat("broken:",  Stats.ITEM_BROKEN,  BuiltInRegistries.ITEM,  stat, flags, enabled);
+            if (element == null) element = stat("dropped:", Stats.ITEM_DROPPED, BuiltInRegistries.ITEM,  stat, flags, enabled);
+            if (element == null) element = stat("picked_up:", Stats.ITEM_PICKED_UP, BuiltInRegistries.ITEM, stat, flags, enabled);
+            if (element == null) element = stat("killed:",    Stats.ENTITY_KILLED,    BuiltInRegistries.ENTITY_TYPE, stat, flags, enabled);
+            if (element == null) element = stat("killed_by:", Stats.ENTITY_KILLED_BY, BuiltInRegistries.ENTITY_TYPE, stat, flags, enabled);
 
             if (element != null)
                 return Flags.wrap(element, flags);
 
-            Identifier statId = Registries.CUSTOM_STAT.get(new Identifier(stat));
-            if (Stats.CUSTOM.hasStat(statId)) {
+            Identifier statId = BuiltInRegistries.CUSTOM_STAT.getValue(Identifier.parse(stat));
+            if (Stats.CUSTOM.contains(statId)) {
                 enabled.updateStats = true;
-                return Flags.wrap(new CustomStatElement(Stats.CUSTOM.getOrCreateStat(statId), flags), flags);
+                return Flags.wrap(new CustomStatElement(Stats.CUSTOM.get(statId), flags), flags);
             }
             Errors.addError(profile.name, debugLine, original, ErrorType.UNKNOWN_STATISTIC, stat);
             return null;
@@ -601,7 +643,7 @@ public class VariableParser {
             int dotIndex = method.lastIndexOf('.');
             if (dotIndex != -1)
                 method = method.substring(0, dotIndex);
-            HudElement element = ATTRIBUTER_MAP.get(TEAMS).get(null, () -> CLIENT.player.getScoreboardTeam(), method, flags, null );
+            HudElement element = ATTRIBUTER_MAP.get(TEAMS).get(null, () -> CLIENT.player.getTeam(), method, flags, null );
             if (element instanceof CreateListElement cle) {
                 String attr = dotIndex == -1 ? "" : flagParts[0].substring(dotIndex + 1);
                 cle.attribute = Attributers.get(new ListProviderSet().with(cle.entry), attr, new Flags(), profile, debugLine);
@@ -617,14 +659,14 @@ public class VariableParser {
 
             try {
                 if (!icon && part.startsWith("#"))
-                    return new ItemTagCountElement(new Identifier(part.substring(1)), flags);
-                Item item = Registries.ITEM.get(new Identifier(part));
+                    return new ItemTagCountElement(Identifier.parse(part.substring(1)), flags);
+                Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(part));
                 if (item != Items.AIR)
                     return Flags.wrap(icon ? new ItemCountIconElement(item, flags) : new ItemCountElement(item, flags), flags);
                 Errors.addError(profile.name, debugLine, original, ErrorType.UNKNOWN_ITEM_ID, part);
                 return null;
             }
-            catch (InvalidIdentifierException e) {
+            catch (IdentifierException e) {
                 Errors.addError(profile.name, debugLine, original, ErrorType.UNKNOWN_ITEM_ID, part);
                 return null;
             }
@@ -632,11 +674,11 @@ public class VariableParser {
 
         if (part.startsWith("s:") || part.startsWith("setting:")) {
             String setting = part.substring(part.indexOf(':') + 1).toLowerCase();
-            Pair<HudElement,Pair<ErrorType,String>> element = SettingsElement.create(setting, flags);
+            Tuple<HudElement,Tuple<ErrorType,String>> element = SettingsElement.create(setting, flags);
 
-            if (element.getLeft() != null)
-                return Flags.wrap(element.getLeft(), flags);
-            Errors.addError(profile.name, debugLine, original, element.getRight().getLeft(), element.getRight().getRight());
+            if (element.getA() != null)
+                return Flags.wrap(element.getA(), flags);
+            Errors.addError(profile.name, debugLine, original, element.getB().getA(), element.getB().getB());
             return null;
         }
 
@@ -651,11 +693,11 @@ public class VariableParser {
                 setting = "key_" + setting;
             }
 
-            GameOptions options = MinecraftClient.getInstance().options;
+            Options options = Minecraft.getInstance().options;
             String key = setting.substring(4);
-            for (KeyBinding binding : options.allKeys)
-                if (binding.getTranslationKey().equalsIgnoreCase(key))
-                    return Flags.wrap(new BooleanSupplierElement(binding::isPressed), flags);
+            for (KeyMapping binding : options.keyMappings)
+                if (binding.getName().equalsIgnoreCase(key))
+                    return Flags.wrap(new BooleanSupplierElement(binding::isDown), flags);
 
             Errors.addError(profile.name, debugLine, original, ErrorType.UNKNOWN_KEYBIND, context);
             return null;
@@ -671,8 +713,8 @@ public class VariableParser {
             Toggle toggle = profile.toggles.get(name);
             if (toggle == null) //Replace with saved key
                 toggle = new Toggle(name.replace('_', ' '), false, debugLine, true,
-                        new KeyBinding("customhud_toggle_" + randomUUID(), GLFW.GLFW_KEY_UNKNOWN, "customhud"),
-                        new KeyBinding("customhud_toggle_" + randomUUID(), GLFW.GLFW_KEY_UNKNOWN, "customhud"));
+                        new KeyMapping("customhud_toggle_" + randomUUID(), GLFW.GLFW_KEY_UNKNOWN, CustomHud.TOGGLES_KB_CAT),
+                        new KeyMapping("customhud_toggle_" + randomUUID(), GLFW.GLFW_KEY_UNKNOWN, CustomHud.TOGGLES_KB_CAT));
             else
                 toggle.lines.add(debugLine);
 
@@ -696,9 +738,9 @@ public class VariableParser {
             return new TextSupplierElement( () -> {
                 Toggle toggle = ProfileManager.getActive().toggles.get(name);
                 if (toggle == null) return null;
-                Text out = toggle.key.getBoundKeyLocalizedText();
+                Component out = toggle.key.getTranslatedKeyMessage();
                 if (!toggle.modifier.isUnbound())
-                    out = toggle.modifier.getBoundKeyLocalizedText().copy().append(" + ").append(out);
+                    out = toggle.modifier.getTranslatedKeyMessage().copy().append(" + ").append(out);
                 return out;
             }, flags );
         }
@@ -716,8 +758,8 @@ public class VariableParser {
                 name = "key." + name;
             }
 
-            InputUtil.Key key;
-            try { key = InputUtil.fromTranslationKey(name); }
+            InputConstants.Key key;
+            try { key = InputConstants.getKey(name); }
             catch(Exception ignored) { key = null; }
             if (key == null) {
                 Errors.addError(profile.name, debugLine, original, ErrorType.UNKNOWN_KEY, name);
@@ -727,8 +769,8 @@ public class VariableParser {
             Toggle toggle = profile.toggles.get(" " + name); //Space indicates key variant
             if (toggle == null)
                 toggle = new Toggle(name, true, debugLine, true,
-                        new KeyBinding("customhud_key_toggle_" + randomUUID(), GLFW.GLFW_KEY_UNKNOWN, "customhud"),
-                        new KeyBinding("customhud_key_toggle_" + randomUUID(), key.getCode(), "customhud"));
+                        new KeyMapping("customhud_key_toggle_" + randomUUID(), GLFW.GLFW_KEY_UNKNOWN, CustomHud.TOGGLES_KB_CAT),
+                        new KeyMapping("customhud_key_toggle_" + randomUUID(), key.getValue(), CustomHud.TOGGLES_KB_CAT));
             else
                 toggle.lines.add(debugLine);
 
@@ -769,15 +811,17 @@ public class VariableParser {
 
         switch (part) {
             case "gizmo": {
-                if (flags.rotation != 0)
-                    Errors.addError(profile.name, debugLine, original, ErrorType.GIZMO_NO_ROTATE, null);
-                return Flags.wrap(new DebugGizmoElement(flags), flags);
+//                if (flags.rotation != 0)
+//                    Errors.addError(profile.name, debugLine, original, ErrorType.GIZMO_NO_ROTATE, null);
+//                return Flags.wrap(new DebugGizmoElement(flags), flags);
+                Errors.addError(profile.name, debugLine, original, ErrorType.GIZMO_NO_WORK, null);
+                return null;
             }
             case "record_icon": enabled.music = true; return Flags.wrap(new RecordIconElement(flags), flags);
             case "target_block_icon", "target_icon", "tbicon": enabled.targetBlock = enabled.world = true;
                 return Flags.wrap(new RichItemSupplierIconElement(null, () -> ComplexData.targetBlock == null ? null : new ItemStack(ComplexData.targetBlock.getBlock()), flags, false), flags);
             case "target_fluid_icon", "tficon": enabled.targetFluid = enabled.world = true;
-                return Flags.wrap(new RichItemSupplierIconElement(null, () -> ComplexData.targetFluid == null ? null : new ItemStack(ComplexData.targetFluid.getFluid().getBucketItem()), flags, false), flags);
+                return Flags.wrap(new RichItemSupplierIconElement(null, () -> ComplexData.targetFluid == null ? null : new ItemStack(ComplexData.targetFluid.getType().getBucket()), flags, false), flags);
             case "actionbar_msg", "actionbar": return Flags.wrap(new ActionbarMsgElement(flags), flags);
             case "title_msg", "title": return Flags.wrap(new TitleMsgElement(TITLE_MSG, flags), flags);
             case "subtitle_msg", "subtitle": return Flags.wrap(new TitleMsgElement(SUBTITLE_MSG, flags), flags);
@@ -812,7 +856,7 @@ public class VariableParser {
         if (!stat.startsWith(prefix))
             return null;
 
-        Optional<?> entry = registry.getOrEmpty( new Identifier(stat.substring(prefix.length())) );
+        Optional<?> entry = registry.getOptional( Identifier.parse(stat.substring(prefix.length())) );
         if (entry.isPresent()) {
             enabled.updateStats = true;
             return new TypedStatElement(type, entry.get(), flags);
@@ -866,7 +910,7 @@ public class VariableParser {
         return null;
     }
 
-    private static Supplier<Text> getTextSupplier(String element, ComplexData.Enabled enabled) {
+    private static Supplier<Component> getTextSupplier(String element, ComplexData.Enabled enabled) {
         return switch (element) {
             case "display_name", "name" -> DISPLAY_NAME;
             case "target_entity_name", "ten" -> {enabled.targetEntity = true; yield TARGET_ENTITY_NAME;}
@@ -906,8 +950,10 @@ public class VariableParser {
             case "username" -> USERNAME;
             case "uuid" -> UUID;
             case "dimension" -> DIMENSION;
-            case "facing" -> FACING;
-            case "facing_short" -> FACING_SHORT;
+            case "facing", "facing4" -> FACING4;
+            case "facing_short", "facing4_short" -> FACING4_SHORT;
+            case "facing8" -> FACING8;
+            case "facing8_short" -> FACING8_SHORT;
             case "facing_towards_xz" -> FACING_TOWARDS_XZ;
             case "biome" -> BIOME;
             case "moon_phase_word" -> { enabled.clientChunk = true; yield MOON_PHASE_WORD; }
@@ -938,6 +984,10 @@ public class VariableParser {
             case "bb_cont","biome_builder_continents" -> {enabled.serverWorld = true; yield BIOME_BUILDER_CONTINENTS;}
 
             case "am_pm" -> { enabled.time = true; yield TIME_AM_PM; }
+
+            case "resource_pack_version", "rp_version" -> RESOURCE_PACK_VERSION;
+            case "data_pack_version", "datapack_version", "dp_version" -> DATA_PACK_VERSION;
+
             default -> null;
         };
     }
@@ -968,6 +1018,9 @@ public class VariableParser {
             case "gliding", "flying_with_style" -> FALLING_WITH_STYLE;
             case "on_ground" -> ON_GROUND;
             case "sprint_held" -> SPRINT_HELD;
+            case "is_frozen" -> IS_FROZEN;
+            case "is_freezing" -> IS_FREEZING;
+            case "on_fire" -> IS_ON_FIRE;
             case "hud_hidden" -> HUD_HIDDEN;
             case "screen_open" -> SCREEN_OPEN;
             case "chat_open" -> CHAT_OPEN;
@@ -987,6 +1040,9 @@ public class VariableParser {
             case "is_tick_sprinting", "tick_sprinting" -> IS_TICK_SPRINTING;
             case "is_tick_frozen", "tick_frozen" -> IS_TICK_FROZEN;
             case "is_tick_stepping", "tick_stepping" -> IS_TICK_STEPPING;
+
+            case "on_load" -> ON_LOAD;
+            case "on_join" -> ON_JOIN;
 
             case "reaL_am" -> REAL_AM;
             case "reaL_pm" -> REAL_PM;
@@ -1163,8 +1219,10 @@ public class VariableParser {
             case "real_second" -> REAL_SECOND;
             case "real_millisecond", "real_ms" -> REAL_MICROSECOND;
 
-            case "resource_pack_version", "rp_version" -> RESOURCE_PACK_VERSION;
-            case "data_pack_version", "datapack_version", "dp_version" -> DATA_PACK_VERSION;
+            case "resource_pack_major_version", "rp_major", "rp_major_version" -> RESOURCE_PACK_VERSION_MAJOR;
+            case "resource_pack_minor_version", "rp_minor", "rp_minor_version" -> RESOURCE_PACK_VERSION_MINOR;
+            case "data_pack_major_version", "datapack_major_version", "dp_major" -> DATA_PACK_VERSION_MAJOR;
+            case "data_pack_minor_version", "datapack_minor_version", "dp_minor" -> DATA_PACK_VERSION_MINOR;
 
             case "mainhand_slot" -> MAINHAND_SLOT;
 
@@ -1173,8 +1231,6 @@ public class VariableParser {
     }
 
     private static NumberSupplierElement.Entry getDecimalSupplier(String element, ComplexData.Enabled enabled) {
-        if (element.startsWith("velocity_"))
-            enabled.velocity = true;
         return switch (element) {
             case "x" -> X;
             case "y" -> Y;
@@ -1196,14 +1252,9 @@ public class VariableParser {
             case "vehicle_entity_health", "vehicle_health", "veh" -> VEHICLE_ENTITY_HEALTH;
             case "vehicle_entity_max_health", "vehicle_max_health", "vemh" -> VEHICLE_ENTITY_MAX_HEALTH;
             case "vehicle_horse_jump", "horse_jump", "vhj" -> VEHICLE_HORSE_JUMP;
-            case "reach_distance", "reach" -> REACH_DISTANCE;
+            case "entity_reach_distance", "reach_distance", "entity_reach", "reach" -> ENTITY_REACH_DISTANCE;
+            case "block_reach_distance", "block_reach" -> BLOCK_REACH_DISTANCE;
             case "fishing_hook_distance" -> FISHING_HOOK_DISTANCE;
-            case "velocity_xz" -> VELOCITY_XZ;
-            case "velocity_y" -> VELOCITY_Y;
-            case "velocity_xyz" -> VELOCITY_XYZ;
-            case "velocity_xz_kmh" -> VELOCITY_XZ_KMH;
-            case "velocity_y_kmh" -> VELOCITY_Y_KMH;
-            case "velocity_xyz_kmh" -> VELOCITY_XYZ_KMH;
             case "yaw" -> YAW;
             case "pitch" -> PITCH;
             case "day" -> DAY;
@@ -1252,6 +1303,9 @@ public class VariableParser {
             case "xp_per", "xp_percentage" -> XP_POINTS_PER;
             case "air_per", "air_percentage" -> AIR_LEVEL_PERCENTAGE;
             case "health_per", "health_percentage", "hp_per" -> HEALTH_PERCENTAGE;
+            case "frozen_per", "frozen_percentage" -> FROZEN_PERCENTAGE;
+            case "frozen_ticks" -> FROZEN_TICKS;
+            case "attack_cooldown" -> ATTACK_COOLDOWN;
 
             case "nr_temp","noise_temperature" -> {enabled.serverWorld = true; yield NOISE_ROUTER_TEMPERATURE;}
             case "nr_veg","noise_vegetation" -> {enabled.serverWorld = true; yield NOISE_ROUTER_VEGETATION;}
@@ -1444,7 +1498,9 @@ public class VariableParser {
             case "records" -> {enabled.music = true; yield RECORDS;}
             case "chat_messages" -> CHAT_MESSAGES;
 
-            default -> null;
+            case "on_chat_msg", "on_chat_message" -> ON_CHAT_MESSAGE.register(profile);
+
+             default -> null;
         };
 
         if (provider == null)
@@ -1454,10 +1510,10 @@ public class VariableParser {
             return null;
 
         var flags = getPrefix(provider, flagParts, profile.name, debugLine, variable);
-        return new ListProviderSet.Entry(provider, randomUUID(), flags.getLeft(), flags.getRight());
+        return new ListProviderSet.Entry(provider, randomUUID(), flags.getA(), flags.getB());
     }
 
-    public static Pair<String,Boolean> getPrefix(ListProvider provider, String[] flagParts, String profile, int line, String part) {
+    public static Tuple<String,Boolean> getPrefix(ListProvider provider, String[] flagParts, String profile, int line, String part) {
         String prefix = Attributers.defaultPrefix(provider);
         boolean reversed = false;
         for (int i = 1; i < flagParts.length; i++) {
@@ -1471,7 +1527,7 @@ public class VariableParser {
                 Errors.addError(profile, line, part, ErrorType.UNKNOWN_LIST_VARIABLE_FLAG, flagParts[i]);
             }
         }
-        return new Pair<>(prefix, reversed);
+        return new Tuple<>(prefix, reversed);
     }
     public static boolean getReversed(String[] flagParts) {
         for (int i = 1; i < flagParts.length; i++)
@@ -1581,7 +1637,7 @@ public class VariableParser {
         if (provider == null)
             return null;
         var flags = getPrefix(provider, flagParts, profile.name, debugLine, original);
-        return listElement( new ListProviderSet.Entry(provider, randomUUID(), flags.getLeft(), flags.getRight()), part, commaIndex, profile, debugLine, enabled, original, listProviders);
+        return listElement( new ListProviderSet.Entry(provider, randomUUID(), flags.getA(), flags.getB()), part, commaIndex, profile, debugLine, enabled, original, listProviders);
     }
 
 
@@ -1656,7 +1712,7 @@ public class VariableParser {
 
     public static HudElement getAttributeElement(String part, Profile profile, int debugLine, ComplexData.Enabled enabled, String original) {
         if (part.startsWith("item:"))
-            return attrElement(part, SLOT_READER, false, (slot) -> () -> CLIENT.player.getStackReference(slot).get(),
+            return attrElement(part, SLOT_READER, false, (slot) -> () -> CLIENT.player.getSlot(slot).get(),
                     ITEM, ErrorType.UNKNOWN_SLOT, ErrorType.UNKNOWN_ITEM_METHOD, profile, debugLine, enabled, original);
 
         if (part.startsWith("attribute:"))
@@ -1669,14 +1725,14 @@ public class VariableParser {
 
         if (part.startsWith("hooked_entity_attribute:") || part.startsWith("hooked_entity_attr:") || part.startsWith("hea:"))
             return attrElement(part, ENTITY_ATTR_READER, true,
-                    (attr) -> () -> getEntityAttr(CLIENT.player.fishHook == null ? null : CLIENT.player.fishHook.getHookedEntity(), attr),
+                    (attr) -> () -> getEntityAttr(CLIENT.player.fishing == null ? null : CLIENT.player.fishing.getHookedIn(), attr),
                     ATTRIBUTE, ErrorType.UNKNOWN_ATTRIBUTE, ErrorType.UNKNOWN_ATTRIBUTE_METHOD, profile, debugLine, enabled, original);
 
         if (part.startsWith("target_block_property:") || part.startsWith("target_property:") || part.startsWith("tbprop:")) {
             HudElement e = attrElement(part, src -> src, false,
                     (prop) -> () -> {
-                        for (var p : ComplexData.targetBlock.getEntries().entrySet())
-                            if (p.getKey().getName().equalsIgnoreCase(prop))
+                        for (var p : ComplexData.targetBlock.getValues().toList())
+                            if (p.property().getName().equalsIgnoreCase(prop))
                                 return p;
                         return null;
                     },
@@ -1691,12 +1747,12 @@ public class VariableParser {
                     PLAYER, null, ErrorType.UNKNOWN_TEAM_METHOD, profile, debugLine, enabled, original);
 
         if (part.startsWith("team:"))
-            return attrElement(part, src -> src, false, (team) -> () -> CLIENT.world.getScoreboard().getTeam(team),
+            return attrElement(part, src -> src, false, (team) -> () -> CLIENT.level.getScoreboard().getPlayerTeam(team),
                     TEAM, null, ErrorType.UNKNOWN_TEAM_METHOD, profile, debugLine, enabled, original);
 
         if (part.startsWith("objective:")) {
             enabled.serverWorld = true;
-            return attrElement(part, src -> src, false, (name) -> () -> AttributeHelpers.scoreboard().getNullableObjective(name),
+            return attrElement(part, src -> src, false, (name) -> () -> AttributeHelpers.scoreboard().getObjective(name),
                     SCOREBOARD_OBJECTIVE, null, ErrorType.UNKNOWN_OBJECTIVE_METHOD, profile, debugLine, enabled, original);
         }
 
@@ -1705,7 +1761,7 @@ public class VariableParser {
                     BOSSBAR, null, ErrorType.UNKNOWN_BOSSBAR_METHOD, profile, debugLine, enabled, original);
 
         if (part.startsWith("effect:"))
-            return attrElement(part, src -> Registries.STATUS_EFFECT.get(Identifier.tryParse(src)), true, (effect) -> () -> CLIENT.player.getStatusEffect(effect),
+            return attrElement(part, src -> BuiltInRegistries.MOB_EFFECT.get(Identifier.tryParse(src)).orElse(null), true, (effect) -> () -> CLIENT.player.getEffect(effect),
                     EFFECT, ErrorType.UNKNOWN_EFFECT_ID, ErrorType.UNKNOWN_EFFECT_METHOD, profile, debugLine, enabled, original);
 
         if (part.startsWith("mod:")) {
@@ -1718,7 +1774,7 @@ public class VariableParser {
         }
 
         if (part.startsWith("resource_pack:"))
-            return attrElement(part, (src) -> CLIENT.getResourcePackManager().getProfile(src), false, (pack) -> () -> pack,
+            return attrElement(part, (src) -> CLIENT.getResourcePackRepository().getPack(src), false, (pack) -> () -> pack,
                     PACK, ErrorType.UNKNOWN_RESOURCE_PACK, ErrorType.UNKNOWN_PACK_METHOD, profile, debugLine, enabled, original );
 
         if (part.startsWith("data_pack:") || part.startsWith("datapack:"))

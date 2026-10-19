@@ -1,12 +1,12 @@
 package com.minenash.customhud.render;
 
-import net.minecraft.util.Identifier;
+import net.minecraft.network.chat.FontDescription;
 
 public class RenderPiece {
 
     public final Object element;
     public final Object value;
-    public final Identifier font;
+    public final FontDescription font;
     public final int color;
     public final int bgColor;
     public final boolean shadow;
@@ -15,7 +15,7 @@ public class RenderPiece {
     public int lineWith;
     public boolean shiftTextUpOrFitItemIcon;
 
-    public RenderPiece(Object element, Object value, Identifier font, int x, int y, int color, int bgColor, boolean shadow, boolean shiftTextUpOrFitItemIcon) {
+    public RenderPiece(Object element, Object value, FontDescription font, int x, int y, int color, int bgColor, boolean shadow, boolean shiftTextUpOrFitItemIcon) {
         this.element = element;
         this.value = value;
         this.font = font;

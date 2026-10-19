@@ -14,12 +14,12 @@
 //import com.minenash.customhud.data.Profile;
 //import com.minenash.customhud.data.Section;
 //import com.mojang.blaze3d.systems.RenderSystem;
-//import net.minecraft.client.MinecraftClient;
-//import net.minecraft.client.gui.DrawContext;
-//import net.minecraft.client.gui.screen.ChatScreen;
+//import net.minecraft.client.Minecraft;
+//import net.minecraft.client.gui.GuiGraphicsExtractorExtractor;
+//import net.minecraft.client.gui.screens.ChatScreen;
 //import net.minecraft.client.render.*;
-//import net.minecraft.text.Text;
-//import net.minecraft.util.Identifier;
+//import net.minecraft.network.chat.Component;
+//import net.minecraft.resources.Identifier;
 //import org.joml.Matrix4f;
 //
 //import java.util.ArrayList;
@@ -27,12 +27,12 @@
 //
 //public class CustomHudRenderer {
 //
-//    private static final MinecraftClient client = MinecraftClient.getInstance();
+//    private static final Minecraft client = Minecraft.getInstance();
 //
 //    public static Identifier font;
 //    public static HudTheme theme;
 //
-//    public static void render(DrawContext context, float tickDelta) {
+//    public static void render(GuiGraphicsExtractor context, float tickDelta) {
 //
 //        Profile profile = ProfileManager.getActive();
 //        if (profile == null || client.getDebugHud().shouldShowDebugHud())
@@ -221,7 +221,7 @@
 //                }
 //            else if (piece.element instanceof String value && !value.isEmpty())
 //                context.drawText(client.textRenderer, value, piece.x, piece.shiftTextUpOrFitItemIcon ? piece.y-1 : piece.y, piece.color, piece.shadow);
-//            else if (piece.element instanceof Text text)
+//            else if (piece.element instanceof Component text)
 //                context.drawText(client.textRenderer, text, piece.x, piece.shiftTextUpOrFitItemIcon ? piece.y-1 : piece.y, piece.color, piece.shadow);
 //
 //        }
@@ -255,7 +255,7 @@
 //
 //    }
 //
-//    private static void addLineBg(DrawContext context, BufferBuilder builder, int x1, int y1, int x2, int y2, int color) {
+//    private static void addLineBg(GuiGraphicsExtractor context, BufferBuilder builder, int x1, int y1, int x2, int y2, int color) {
 //        Matrix4f matrix = context.getMatrices().peek().getPositionMatrix();
 //        float f = (float)(color >> 24 & 255) / 255.0F;
 //        float g = (float)(color >> 16 & 255) / 255.0F;
