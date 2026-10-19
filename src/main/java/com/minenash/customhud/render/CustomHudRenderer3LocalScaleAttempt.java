@@ -14,13 +14,13 @@
 //import com.minenash.customhud.data.Profile;
 //import com.minenash.customhud.data.Section;
 //import com.mojang.blaze3d.systems.RenderSystem;
-//import net.minecraft.client.MinecraftClient;
-//import net.minecraft.client.gui.DrawContext;
-//import net.minecraft.client.gui.hud.DebugHud;
-//import net.minecraft.client.gui.screen.ChatScreen;
+//import net.minecraft.client.Minecraft;
+//import net.minecraft.client.gui.GuiGraphicsExtractorExtractor;
+//import net.minecraft.client.gui.components.DebugScreenOverlay;
+//import net.minecraft.client.gui.screens.ChatScreen;
 //import net.minecraft.client.render.*;
-//import net.minecraft.text.Text;
-//import net.minecraft.util.Identifier;
+//import net.minecraft.network.chat.Component;
+//import net.minecraft.resources.Identifier;
 //
 //import java.util.ArrayList;
 //import java.util.List;
@@ -28,12 +28,12 @@
 //
 //public class CustomHudRenderer3LocalScaleAttempt {
 //
-//    private static final MinecraftClient client = MinecraftClient.getInstance();
+//    private static final Minecraft client = Minecraft.getInstance();
 //
 //    public static Identifier font;
 //    public static HudTheme theme;
 //
-//    public static void render(DrawContext context, float tickDelta) {
+//    public static void render(GuiGraphicsExtractor context, float tickDelta) {
 //
 //        Profile profile = ProfileManager.getActive();
 //        if (profile == null || client.getDebugHud().shouldShowDebugHud())
@@ -248,7 +248,7 @@
 //                }
 //            else if (piece.element instanceof String value && !value.isEmpty())
 //                context.drawText(client.textRenderer, value, piece.x, y, piece.color, piece.shadow);
-//            else if (piece.element instanceof Text text)
+//            else if (piece.element instanceof Component text)
 //                context.drawText(client.textRenderer, text, piece.x, y, piece.color, piece.shadow);
 //
 //        }
@@ -257,7 +257,7 @@
 //            int right = context.getScaledWindowWidth();
 //            int center = right / 2;
 //
-//            DebugHud hud = client.inGameHud.getDebugHud();
+//            DebugScreenOverlay hud = client.inGameHud.getDebugHud();
 //            switch (profile.leftChart) {
 //                case FPS -> hud.renderingChart.render(context, 0, hud.renderingChart.getWidth(center));
 //                case TICK -> hud.tickChart.render(context, 0, hud.tickChart.getWidth(center));

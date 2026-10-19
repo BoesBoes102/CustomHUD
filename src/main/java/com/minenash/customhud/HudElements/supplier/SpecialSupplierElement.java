@@ -2,41 +2,43 @@ package com.minenash.customhud.HudElements.supplier;
 
 import com.minenash.customhud.complex.ComplexData;
 import com.minenash.customhud.HudElements.interfaces.HudElement;
-import net.minecraft.block.Block;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.CloudRenderMode;
-import net.minecraft.client.option.GameOptions;
-import net.minecraft.client.option.GraphicsMode;
-import net.minecraft.client.resource.language.I18n;
-import net.minecraft.fluid.Fluid;
-import net.minecraft.item.Item;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.math.Direction;
+import com.minenash.customhud.HudElements.SettingsElement;
+import com.minenash.customhud.mixin.accessors.GameOptionsAccessor;
+import net.minecraft.client.CloudStatus;
+import net.minecraft.client.GraphicsPreset;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.OptionInstance;
+import net.minecraft.client.Options;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.material.Fluid;
 import org.apache.commons.lang3.text.WordUtils;
 
 import java.util.function.Supplier;
 
 import static com.minenash.customhud.ProfileManager.getActive;
-import static net.fabricmc.fabric.api.renderer.v1.RendererAccess.INSTANCE;
 
 public class SpecialSupplierElement implements HudElement {
 
-    private static final MinecraftClient client = MinecraftClient.getInstance();
+    private static final Minecraft client = Minecraft.getInstance();
     private static boolean isFacingEastOrSouth() {
-        Direction dir = client.getCameraEntity().getHorizontalFacing();
+        Direction dir = client.getCameraEntity().getDirection();
         return dir == Direction.EAST || dir == Direction.SOUTH;
     }
 
-    public static final Entry DIFFICULTY = of( () -> client.world.getDifficulty().getName(),
-                                               () -> client.world.getDifficulty().getId(),
-                                               () -> client.world.getDifficulty().getId() != 0);
+    public static final Entry DIFFICULTY = of( () -> client.level.getDifficulty().getSerializedName(),
+                                               () -> client.level.getDifficulty().getId(),
+                                               () -> client.level.getDifficulty().getId() != 0);
 
-    public static final Entry MAX_FPS = of( () -> client.options.getMaxFps().getValue() == GameOptions.MAX_FRAMERATE ? null : client.options.getMaxFps().getValue().toString(),
-                                            () ->  client.options.getMaxFps().getValue(),
-                                            () -> client.options.getMaxFps().getValue() == GameOptions.MAX_FRAMERATE);
+    public static final Entry MAX_FPS = of( () -> client.options.framerateLimit().get() == Options.UNLIMITED_FRAMERATE_CUTOFF ? null : client.options.framerateLimit().get().toString(),
+                                            () ->  client.options.framerateLimit().get(),
+                                            () -> client.options.framerateLimit().get() == Options.UNLIMITED_FRAMERATE_CUTOFF);
 
-    public static final Entry PROFILE_KEYBIND = of( () -> getActive() == null ? "" : getActive().keyBinding.getBoundKeyLocalizedText().getString(),
-                                                    () -> getActive() == null ? 0 : getActive().keyBinding.boundKey.getCode(),
+    public static final Entry PROFILE_KEYBIND = of( () -> getActive() == null ? "" : getActive().keyBinding.getTranslatedKeyMessage().getString(),
+                                                    () -> getActive() == null ? 0 : getActive().keyBinding.key.getValue(),
                                                     () -> getActive() != null && !getActive().keyBinding.isUnbound());
 
     public static final Entry TIME_HOUR_24 = of( () -> String.format("%02d", ComplexData.timeOfDay / 1000),
@@ -51,41 +53,75 @@ public class SpecialSupplierElement implements HudElement {
                                                  () -> (int)((ComplexData.timeOfDay % 1000) % (1000/60F) * 3.6F),
                                                  () -> (int)((ComplexData.timeOfDay % 1000) % (1000/60F) * 3.6F) != 0);
 
-    public static final Entry TARGET_BLOCK = of( () -> I18n.translate(ComplexData.targetBlock.getBlock().getTranslationKey()),
-                                                 () -> Block.getRawIdFromState(ComplexData.targetBlock),
+    public static final Entry TARGET_BLOCK = of( () -> I18n.get(ComplexData.targetBlock.getBlock().getDescriptionId()),
+                                                 () -> Block.getId(ComplexData.targetBlock),
                                                  () -> !ComplexData.targetBlock.isAir());
 
-    public static final Entry TARGET_FLUID = of( () -> WordUtils.capitalize(Registries.FLUID.getId(ComplexData.targetFluid.getFluid()).getPath().replace('_',' ')),
-                                                 () -> Fluid.STATE_IDS.getRawId(ComplexData.targetFluid),
+    public static final Entry TARGET_FLUID = of( () -> WordUtils.capitalize(BuiltInRegistries.FLUID.getKey(ComplexData.targetFluid.getType()).getPath().replace('_',' ')),
+                                                 () -> Fluid.FLUID_STATE_REGISTRY.getId(ComplexData.targetFluid),
                                                  () -> !ComplexData.targetFluid.isEmpty());
 
-    public static final Entry ITEM_OLD = of( () -> I18n.translate(client.player.getMainHandStack().getItem().getTranslationKey()),
-                                         () -> Item.getRawId(client.player.getMainHandStack().getItem()),
-                                         () -> !client.player.getMainHandStack().isEmpty());
+    public static final Entry ITEM_OLD = of( () -> I18n.get(client.player.getMainHandItem().getItem().getDescriptionId()),
+                                         () -> Item.getId(client.player.getMainHandItem().getItem()),
+                                         () -> !client.player.getMainHandItem().isEmpty());
 
-    public static final Entry ITEM_NAME = of( () -> client.player.getMainHandStack().getName().getString(),
-            () -> client.player.getMainHandStack().getName().getString().length(),
-            () -> !client.player.getMainHandStack().isEmpty());
+    public static final Entry ITEM_NAME = of( () -> client.player.getMainHandItem().getHoverName().getString(),
+            () -> client.player.getMainHandItem().getHoverName().getString().length(),
+            () -> !client.player.getMainHandItem().isEmpty());
 
     @Deprecated
-    public static final Entry OFFHAND_ITEM = of( () -> I18n.translate(client.player.getOffHandStack().getItem().getTranslationKey()),
-                                                 () -> Item.getRawId(client.player.getOffHandStack().getItem()),
-                                                 () -> !client.player.getOffHandStack().isEmpty());
+    public static final Entry OFFHAND_ITEM = of( () -> I18n.get(client.player.getOffhandItem().getItem().getDescriptionId()),
+                                                 () -> Item.getId(client.player.getOffhandItem().getItem()),
+                                                 () -> !client.player.getOffhandItem().isEmpty());
     @Deprecated
-    public static final Entry OFFHAND_ITEM_NAME = of( () -> client.player.getOffHandStack().getName().getString(),
-                                                      () -> client.player.getOffHandStack().getName().getString().length(),
-                                                      () -> !client.player.getOffHandStack().isEmpty());
+    public static final Entry OFFHAND_ITEM_NAME = of( () -> client.player.getOffhandItem().getHoverName().getString(),
+                                                      () -> client.player.getOffhandItem().getHoverName().getString().length(),
+                                                      () -> !client.player.getOffhandItem().isEmpty());
 
-    public static final Entry GRAPHICS_MODE = of( () -> client.options.getGraphicsMode().getValue().toString(),
-                                                  () -> client.options.getGraphicsMode().getValue() == GraphicsMode.FAST ? 0 : (client.options.getGraphicsMode().getValue() == GraphicsMode.FANCY ? 1 : 2),
-                                                  () -> true);
+    public static final Entry GRAPHICS_MODE = of(() -> {
+        if (!SettingsElement.initialized)
+            return "fancy";
+        var opt = SettingsElement.simpleOptions.get("graphicsmode");
+        if (opt == null)
+            return "fancy";
+        var value = opt.get();
+        return value instanceof GraphicsPreset ? value.toString().toLowerCase() : "fancy";
+    },
+            () -> {
+                if (!SettingsElement.initialized)
+                    return 1;
+                var opt = SettingsElement.simpleOptions.get("graphicsmode");
+                if (opt == null)
+                    return 1;
+                var value = opt.get();
+                if (value instanceof GraphicsPreset) {
+                    return ((GraphicsPreset) value) == GraphicsPreset.FAST ? 0
+                            : (((GraphicsPreset) value) == GraphicsPreset.FANCY ? 1 : 2);
+                }
+                return 1;
+            },
+            () -> true);
 
-    public static final Entry CLOUDS = of( () -> client.options.getCloudRenderMode().getValue() == CloudRenderMode.OFF ? "off" : (client.options.getCloudRenderMode().getValue() == CloudRenderMode.FAST ? "fast" : "fancy"),
-                                           () -> client.options.getCloudRenderMode().getValue() == CloudRenderMode.OFF ? 0 : (client.options.getCloudRenderMode().getValue() == CloudRenderMode.FAST ? 1 : 2),
-                                           () -> client.options.getCloudRenderMode().getValue() != CloudRenderMode.OFF);
+    public static final Entry CLOUDS = of(
+            () -> {
+                @SuppressWarnings("unchecked")
+                var opt = (OptionInstance<CloudStatus>) ((GameOptionsAccessor) client.options).getCloudRenderMode();
+                return opt.get() == CloudStatus.OFF ? "off"
+                        : (opt.get() == CloudStatus.FAST ? "fast" : "fancy");
+            },
+            () -> {
+                @SuppressWarnings("unchecked")
+                var opt = (OptionInstance<CloudStatus>) ((GameOptionsAccessor) client.options).getCloudRenderMode();
+                return opt.get() == CloudStatus.OFF ? 0 : (opt.get() == CloudStatus.FAST ? 1 : 2);
+            },
+            () -> {
+                @SuppressWarnings("unchecked")
+                var opt = (OptionInstance<CloudStatus>) ((GameOptionsAccessor) client.options).getCloudRenderMode();
+                return opt.get() != CloudStatus.OFF;
+            });
 
-    public static final Entry GAMEMODE = of ( () -> client.interactionManager.getCurrentGameMode().getName(),
-                                              () -> client.interactionManager.getCurrentGameMode().getId(),
+    public static final Entry GAMEMODE = of ( () -> client.gameMode.getPlayerMode().getName(),
+                                              () -> client.gameMode.getPlayerMode().getId(),
                                               () -> true);
 
     public static final Entry FACING_TOWARDS_PN_WORD = of( () -> isFacingEastOrSouth() ? "positive" : "negative",
@@ -96,18 +132,18 @@ public class SpecialSupplierElement implements HudElement {
             () -> isFacingEastOrSouth() ? 1 : 0,
             SpecialSupplierElement::isFacingEastOrSouth);
 
-    public static final Entry ACTIVE_RENDERER = of( () -> INSTANCE.hasRenderer() ? INSTANCE.getRenderer().getClass().getSimpleName() : "none (vanilla)",
-                                                    () -> INSTANCE.hasRenderer() ? INSTANCE.getRenderer().getClass().getSimpleName().length() : 7,
-                                                    () -> INSTANCE.hasRenderer());
+    public static final Entry ACTIVE_RENDERER = of( () -> "none (vanilla)",
+                                                    () -> 7,
+                                                    () -> false);
 
     public static final Entry CAMERA_PERSPECTIVE = of (
-            () -> switch (client.options.getPerspective()) {
+            () -> switch (client.options.getCameraType()) {
                 case FIRST_PERSON -> "First Person";
                 case THIRD_PERSON_BACK -> "Third Person (Back)";
                 case THIRD_PERSON_FRONT -> "Third Person (Front)";
             },
-            () -> client.options.getPerspective().ordinal(),
-            () -> client.options.getPerspective().ordinal() != 0
+            () -> client.options.getCameraType().ordinal(),
+            () -> client.options.getCameraType().ordinal() != 0
     );
 
 

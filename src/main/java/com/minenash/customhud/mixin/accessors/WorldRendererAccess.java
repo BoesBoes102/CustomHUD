@@ -2,17 +2,17 @@ package com.minenash.customhud.mixin.accessors;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.render.BuiltChunkStorage;
-import net.minecraft.client.render.WorldRenderer;
-import net.minecraft.client.render.chunk.ChunkBuilder;
+import net.minecraft.client.renderer.ViewArea;
+import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.state.level.LevelRenderState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
-import org.spongepowered.asm.mixin.gen.Invoker;
 
 @Environment(EnvType.CLIENT)
-@Mixin(WorldRenderer.class)
+@Mixin(LevelRenderer.class)
 public interface WorldRendererAccess {
 
-    @Accessor int getRegularEntityCount();
+    @Accessor ViewArea getViewArea();
+    @Accessor LevelRenderState getLevelRenderState();
 
 }

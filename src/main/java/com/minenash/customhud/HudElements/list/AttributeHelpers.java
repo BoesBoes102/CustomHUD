@@ -2,50 +2,48 @@ package com.minenash.customhud.HudElements.list;
 
 import com.minenash.customhud.complex.ComplexData;
 import com.minenash.customhud.mixin.accessors.AttributeContainerAccessor;
+import com.minenash.customhud.mixin.accessors.BlockPredicatesComponentAccessor;
 import com.minenash.customhud.mixin.accessors.DefaultAttributeContainerAccessor;
 import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import net.minecraft.block.Block;
-import net.minecraft.block.Blocks;
-import net.minecraft.client.network.PlayerListEntry;
-import net.minecraft.client.resource.language.I18n;
-import net.minecraft.command.argument.ItemSlotArgumentType;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.attribute.EntityAttribute;
-import net.minecraft.entity.attribute.EntityAttributeInstance;
-import net.minecraft.entity.attribute.EntityAttributeModifier;
-import net.minecraft.entity.boss.BossBar;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.registry.Registries;
-import net.minecraft.resource.ResourcePackProfile;
-import net.minecraft.scoreboard.Scoreboard;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
-import net.minecraft.text.TextContent;
-import net.minecraft.text.TranslatableTextContent;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
-
 import java.util.*;
 import java.util.function.Function;
 import java.util.regex.Pattern;
+import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.commands.arguments.SlotArgument;
+import net.minecraft.core.Direction;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponentType;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentContents;
+import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.packs.repository.Pack;
+import net.minecraft.util.Mth;
+import net.minecraft.world.BossEvent;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.item.AdventureModePredicate;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.ItemAttributeModifiers;
+import net.minecraft.world.item.component.ItemLore;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.scores.Scoreboard;
 
 import static com.minenash.customhud.CustomHud.CLIENT;
-import static net.minecraft.item.ItemStack.DISPLAY_KEY;
-import static net.minecraft.item.ItemStack.LORE_KEY;
 
 public class AttributeHelpers {
 
-    public static final Function<String, EntityAttribute> ENTITY_ATTR_READER = (src) -> Registries.ATTRIBUTE.get(Identifier.tryParse(src));
-    public static final Function<String, ResourcePackProfile> DATA_PACK_READER = (src) ->
-        CLIENT.getServer() == null ? null : CLIENT.getServer().getDataPackManager().getProfile(src);
+    public static final Function<String, Attribute> ENTITY_ATTR_READER = (src) -> BuiltInRegistries.ATTRIBUTE.getValue(Identifier.tryParse(src));
+    public static final Function<String, Pack> DATA_PACK_READER = (src) ->
+        CLIENT.getSingleplayerServer() == null ? null : CLIENT.getSingleplayerServer().getPackRepository().getPack(src);
 
     private static final Pattern TIMING_PERIOD_TO_SPECIAL = Pattern.compile("(?<!\\\\)\\.");
     public static final Function<String, String> PROFILER_TIMING_READER = (src) -> {
@@ -59,7 +57,7 @@ public class AttributeHelpers {
         if (src.isBlank())
             return null;
         try {
-            return ItemSlotArgumentType.itemSlot().parse(new StringReader(switch (src) {
+            return SlotArgument.slot().parse(new StringReader(switch (src) {
                 case "head", "chest", "legs", "feet" -> "armor." + src;
                 case "mainhand", "offhand" -> "weapon." + src;
                 case "main", "off" -> "weapon." + src + "hand";
@@ -77,117 +75,65 @@ public class AttributeHelpers {
 
     public record ReceivedPower(Direction direction, int power, int strongPower) {}
 
-    public static PlayerListEntry getPlayer(String src) {
-        PlayerListEntry p = CLIENT.getNetworkHandler().getPlayerListEntry(src);
+    public static PlayerInfo getPlayer(String src) {
+        PlayerInfo p = CLIENT.getConnection().getPlayerInfo(src);
         if (p != null)
             return p;
         try {
-            return CLIENT.getNetworkHandler().getPlayerListEntry(UUID.fromString(src));
+            return CLIENT.getConnection().getPlayerInfo(UUID.fromString(src));
         }
         catch (Exception ignored) {}
         return null;
     }
 
     public static Entity getFullEntity(Entity entity) {
-        return CLIENT.getServer() == null || entity == null? entity :
-                CLIENT.getServer().getWorld(entity.getWorld().getRegistryKey()).getEntity(entity.getUuid());
+        return CLIENT.getSingleplayerServer() == null || entity == null? entity :
+                CLIENT.getSingleplayerServer().getLevel(entity.level().dimension()).getEntity(entity.getUUID());
     }
-    public static EntityAttributeInstance getEntityAttr(Entity entity, EntityAttribute attribute) {
+    public static AttributeInstance getEntityAttr(Entity entity, Attribute attribute) {
         Entity e = getFullEntity(entity);
         if (!(e instanceof LivingEntity le)) return null;
-        return le.getAttributeInstance(attribute);
+        return le.getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute));
     }
 
     public static List<?> getEntityAttributes(Entity entity) {
         entity = getFullEntity(entity);
         if (!(entity instanceof LivingEntity le) ) return Collections.EMPTY_LIST;
         AttributeContainerAccessor container = (AttributeContainerAccessor) le.getAttributes();
-        Map<EntityAttribute, EntityAttributeInstance> instances = new HashMap<>(((DefaultAttributeContainerAccessor)container.getFallback()).getInstances());
-        instances.putAll(container.getCustom());
-        return Arrays.asList( (entity.getWorld().isClient ?
-                instances.values().stream().filter(a -> a.getAttribute().isTracked()) : instances.values().stream())
-                .sorted(Comparator.comparing(a -> I18n.translate(a.getAttribute().getTranslationKey()))).toArray() );
+        Map<Holder<Attribute>, AttributeInstance> instances = new HashMap<>(((DefaultAttributeContainerAccessor)container.getSupplier()).getInstances());
+        instances.putAll(container.getAttributes());
+        return Arrays.asList( (entity.level().isClientSide() ?
+                instances.values().stream().filter(a -> a.getAttribute().value().isClientSyncable()) : instances.values().stream())
+                .sorted(Comparator.comparing(a -> I18n.get(a.getAttribute().value().getDescriptionId()))).toArray() );
     }
 
-    public record ItemAttribute(EntityAttribute attribute, EntityAttributeModifier modifier, String slot) {}
+    public record ItemAttribute(Attribute attribute, AttributeModifier modifier, String slot) {}
     public static List<ItemAttribute> getItemStackAttributes(ItemStack stack) {
-        if (!stack.hasNbt() || !stack.getNbt().contains("AttributeModifiers", 9)) {
-            List<ItemAttribute> attributes = new ArrayList<>();
-            for (EquipmentSlot slot : EquipmentSlot.values())
-                for (var entry : stack.getItem().getAttributeModifiers(slot).entries())
-                    attributes.add( new ItemAttribute(entry.getKey(), entry.getValue(), slot.getName()) );
-            return attributes;
-        }
-
         List<ItemAttribute> attributes = new ArrayList<>();
-        NbtList nbtList = stack.getNbt().getList("AttributeModifiers", 10);
 
-        for(int i = 0; i < nbtList.size(); ++i) {
-            NbtCompound nbtCompound = nbtList.getCompound(i);
-
-            EntityAttribute attribute = Registries.ATTRIBUTE.get(Identifier.tryParse(nbtCompound.getString("AttributeName")));
-            if (attribute == null) continue;
-            EntityAttributeModifier modifier = EntityAttributeModifier.fromNbt(nbtCompound);
-            if (modifier != null
-                    && modifier.getId().getLeastSignificantBits() != 0L
-                    && modifier.getId().getMostSignificantBits() != 0L) {
-                String slot = nbtCompound.getString("Slot");
-                if (slot.isEmpty()) slot = "all";
-                attributes.add( new ItemAttribute(attribute, modifier, slot) );
-            }
-        }
-
+        ItemAttributeModifiers component = stack.get(DataComponents.ATTRIBUTE_MODIFIERS);
+        if (component != null)
+            for (var entry : component.modifiers())
+                attributes.add( new ItemAttribute(entry.attribute().value(), entry.modifier(), entry.slot().getSerializedName()) );
         return attributes;
     }
 
-    public static List<Text> getLore(ItemStack stack) {
-        List<Text> lines = new ArrayList<>();
-        if (stack.hasNbt()) {
-            if (stack.getNbt().contains(DISPLAY_KEY, NbtElement.COMPOUND_TYPE)) {
-                NbtCompound nbtCompound = stack.getNbt().getCompound(DISPLAY_KEY);
-                if (nbtCompound.getType(LORE_KEY) == NbtElement.LIST_TYPE) {
-                    NbtList nbtList = nbtCompound.getList(LORE_KEY, NbtElement.STRING_TYPE);
-                    for (int j = 0; j < nbtList.size(); ++j) {
-                        try {
-                            MutableText mutableText2 = Text.Serialization.fromJson(nbtList.getString(j));
-                            if (mutableText2 == null) continue;
-                            lines.add(mutableText2);
-                        }
-                        catch (Exception ignored) {}
-                    }
-                }
+    public static List<Component> getLore(ItemStack stack) {
+        ItemLore component = stack.get(DataComponents.LORE);
+        return component != null ? component.lines() : new ArrayList<>();
+    }
+
+    public static List<Block> getCanX(ItemStack stack, DataComponentType<AdventureModePredicate> type) {
+        AdventureModePredicate component = stack.get(type);
+        Set<Block> blocks = new HashSet<>();
+        if (component != null) {
+            for (var e : ((BlockPredicatesComponentAccessor) component).getPredicates()) {
+                if (e.blocks().isPresent())
+                    for (var ee : e.blocks().get())
+                        blocks.add(ee.value());
             }
         }
-        return lines;
-    }
-
-    public static List<Block> getCanX(ItemStack stack, String tag) {
-        NbtCompound nbtCompound = stack.getNbt();
-
-        if (nbtCompound == null || !nbtCompound.contains(tag, NbtElement.LIST_TYPE))
-            return Collections.EMPTY_LIST;
-
-        List<Block> items = new ArrayList<>();
-        NbtList nbtList = nbtCompound.getList(tag, NbtElement.STRING_TYPE);
-
-        for(int i = 0; i < nbtList.size(); ++i) {
-            String string = nbtList.getString(i);
-
-           Block block = Registries.BLOCK.get(Identifier.tryParse(string));
-           if (block != Blocks.AIR)
-               items.add(block);
-        }
-
-        return items;
-    }
-
-    public static List<String> getHideFlagStrings(ItemStack stack, boolean shown) {
-        List<String> sections = new ArrayList<>();
-        int flags = stack.getHideFlags();
-        for (ItemStack.TooltipSection flag : ItemStack.TooltipSection.values())
-            if (shown == ((flags & flag.getFlag()) == 0))
-                sections.add(flag.name().toLowerCase());
-        return sections;
+        return new ArrayList<>(blocks);
     }
 
     public static List<ItemStack> compactItems(List<ItemStack> stacks) {
@@ -196,7 +142,7 @@ public class AttributeHelpers {
         for (ItemStack stack : stacks) {
             if (stack.isEmpty()) continue;
             for (ItemStack cStack : compact) {
-                if (ItemStack.canCombine(stack, cStack)) {
+                if (ItemStack.isSameItemSameComponents(stack, cStack)) {
                     cStack.setCount(cStack.getCount() + stack.getCount());
                     continue outer;
                 }
@@ -207,99 +153,132 @@ public class AttributeHelpers {
     }
 
     public static List<ItemStack> getItemItems(ItemStack stack, boolean returnStack) {
-        NbtCompound nbt = stack.getNbt();
-        if (stack.isEmpty() || nbt == null)
+        if (stack.isEmpty())
             return returnStack ? Collections.singletonList(stack) : Collections.EMPTY_LIST;
-        if (nbt.contains("Items", NbtElement.LIST_TYPE))
-            return getItemItemsInternal(stack, nbt.getList("Items", NbtElement.COMPOUND_TYPE), returnStack );
-        if (!nbt.contains("BlockEntityTag"))
-            return returnStack ? Collections.singletonList(stack) : Collections.EMPTY_LIST;
-        nbt = nbt.getCompound("BlockEntityTag");
-        if (!nbt.contains("Items", NbtElement.LIST_TYPE))
-            return returnStack ? Collections.singletonList(stack) : Collections.EMPTY_LIST;
-        return getItemItemsInternal(stack, nbt.getList("Items", NbtElement.COMPOUND_TYPE), returnStack );
-    }
-    private static List<ItemStack> getItemItemsInternal(ItemStack stack, NbtList list, boolean returnStack) {
-        List<ItemStack> items = new ArrayList<>(list.size());
 
-        for(int i = 0; i < list.size(); ++i) {
-            List<ItemStack> inner = getItemItems(ItemStack.fromNbt(list.getCompound(i)), true);
-            for (ItemStack is : inner)
-                is.setCount(is.getCount() * stack.getCount());
-            items.addAll(inner);
+        Iterator<ItemStack> iter = null;
+        get_iter:
+        {
+            var bundle = stack.get(DataComponents.BUNDLE_CONTENTS);
+            if (bundle != null) {
+                iter = bundle.itemCopyStream().iterator();
+                break get_iter;
+            }
+            var container = stack.get(DataComponents.CONTAINER);
+            if (container != null) {
+                iter = container.nonEmptyItemCopyStream().iterator();
+                break get_iter;
+            }
+//            var blockEntity = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
+//            if (blockEntity != null) {
+//                blockEntity.
+//            }
         }
 
-        if (items.isEmpty() && returnStack)
-            return Collections.singletonList(stack);
+        if (iter == null || !iter.hasNext())
+            return returnStack ? Collections.singletonList(stack) : Collections.EMPTY_LIST;
 
+        int count = stack.getCount();
+        List<ItemStack> items = new ArrayList<>();
+        while (iter.hasNext()) {
+            ItemStack item = iter.next();
+            items.add(item.copyWithCount(item.getCount() * count));
+        }
         return items;
+
+//        NbtCompound nbt = stack.getNbt();
+//        if (stack.isEmpty() || nbt == null)
+//            return returnStack ? Collections.singletonList(stack) : Collections.EMPTY_LIST;
+//        if (nbt.contains("Items", NbtElement.LIST_TYPE))
+//            return getItemItemsInternal(stack, nbt.getList("Items", NbtElement.COMPOUND_TYPE), returnStack );
+//        if (!nbt.contains("BlockEntityTag"))
+//            return returnStack ? Collections.singletonList(stack) : Collections.EMPTY_LIST;
+//        nbt = nbt.getCompound("BlockEntityTag");
+//        if (!nbt.contains("Items", NbtElement.LIST_TYPE))
+//            return returnStack ? Collections.singletonList(stack) : Collections.EMPTY_LIST;
+//        return getItemItemsInternal(stack, nbt.getList("Items", NbtElement.COMPOUND_TYPE), returnStack );
     }
+//    private static List<ItemStack> getItemItemsInternal(ItemStack stack, NbtList list, boolean returnStack) {
+//        List<ItemStack> items = new ArrayList<>(list.size());
+//
+//        for(int i = 0; i < list.size(); ++i) {
+//            List<ItemStack> inner = getItemItems(ItemStack.fromNbt(list.getCompound(i)), true);
+//            for (ItemStack is : inner)
+//                is.setCount(is.getCount() * stack.getCount());
+//            items.addAll(inner);
+//        }
+//
+//        if (items.isEmpty() && returnStack)
+//            return Collections.singletonList(stack);
+//
+//        return items;
+//    }
 
     public static Scoreboard scoreboard() {
-        return CLIENT.getServer() != null ? CLIENT.getServer().getScoreboard() : CLIENT.world.getScoreboard();
+        return CLIENT.getSingleplayerServer() != null ? CLIENT.getSingleplayerServer().getScoreboard() : CLIENT.level.getScoreboard();
     }
     public static boolean entryOnline(String entry) {
-        if (null != (CLIENT.getServer() != null ? CLIENT.getServer().getPlayerManager().getPlayer(entry) : CLIENT.getNetworkHandler().getPlayerListEntry(entry)))
+        if (null != (CLIENT.getSingleplayerServer() != null ? CLIENT.getSingleplayerServer().getPlayerList().getPlayerByName(entry) : CLIENT.getConnection().getPlayerInfo(entry)))
             return true;
         if (ComplexData.serverWorld == null)
             return false;
         try {
-            return ComplexData.serverWorld.entityManager.has(UUID.fromString(entry));
+            return ComplexData.serverWorld.entityManager.isLoaded(UUID.fromString(entry));
         }
         catch (Exception ignored) {}
         return false;
     }
 
     public static List<?> bossbars(boolean all) {
-        if (CLIENT.getServer() == null)
-            return Arrays.asList(CLIENT.inGameHud.getBossBarHud().bossBars.entrySet().toArray());
+        if (CLIENT.getSingleplayerServer() == null)
+            return Arrays.asList(CLIENT.gui     .hud.getBossOverlay().events.entrySet().toArray());
 
-        List<BossBar> serverBossbars = new ArrayList<>();
-        serverBossbars.addAll(CLIENT.getServer().getBossBarManager().commandBossBars.values());
+        List<BossEvent> serverBossbars = new ArrayList<>();
+        serverBossbars.addAll(CLIENT.getSingleplayerServer().getCustomBossEvents().events.values());
         serverBossbars.addAll(ComplexData.bossbars.values());
 
         if (all)
             return serverBossbars;
 
-        Set<UUID> client = CLIENT.inGameHud.getBossBarHud().bossBars.keySet();
-        return Arrays.asList( serverBossbars.stream().filter(bar -> client.contains(bar.getUuid())).toArray() );
+        Set<UUID> client = CLIENT.gui.hud.getBossOverlay().events.keySet();
+        return Arrays.asList( serverBossbars.stream().filter(bar -> client.contains(bar.getId())).toArray() );
     }
 
-    public static BossBar getBossBar(String input) {
-        boolean client = CLIENT.getServer() == null;
+    public static BossEvent getBossBar(String input) {
+        boolean client = CLIENT.getSingleplayerServer() == null;
         try {
             UUID uuid = UUID.fromString(input);
             if (client)
-                return CLIENT.inGameHud.getBossBarHud().bossBars.get(uuid);
-            for (BossBar bar : CLIENT.getServer().getBossBarManager().commandBossBars.values())
-                if (bar.getUuid() == uuid)
+                return CLIENT.gui.hud.getBossOverlay().events.get(uuid);
+            for (BossEvent bar : CLIENT.getSingleplayerServer().getCustomBossEvents().events.values())
+                if (bar.getId() == uuid)
                     return bar;
-            BossBar bb = ComplexData.bossbars.get(uuid);
+            BossEvent bb = ComplexData.bossbars.get(uuid);
             if (bb != null)
                 return bb;
         }
         catch (Exception ignored) {}
 
         if (client) {
-            for (BossBar bar : CLIENT.inGameHud.getBossBarHud().bossBars.values())
+            for (BossEvent bar : CLIENT.gui.hud.getBossOverlay().events.values())
                 if (bar.getName().getString().equalsIgnoreCase(input))
                     return bar;
         }
         else {
-            BossBar bar = CLIENT.getServer().getBossBarManager().get(Identifier.tryParse(input));
+            BossEvent bar = CLIENT.getSingleplayerServer().getCustomBossEvents().get(Identifier.tryParse(input));
             if (bar != null)
                 return bar;
-            for (BossBar bar2 : CLIENT.getServer().getBossBarManager().commandBossBars.values())
+            for (BossEvent bar2 : CLIENT.getSingleplayerServer().getCustomBossEvents().events.values())
                 if (bar2.getName().getString().equalsIgnoreCase(input))
                     return bar2;
-            for (BossBar bar2 : ComplexData.bossbars.values())
+            for (BossEvent bar2 : ComplexData.bossbars.values())
                 if (bar2.getName().getString().equalsIgnoreCase(input))
                     return bar2;
         }
         return null;
     }
 
-    public static int getBossBarColor(BossBar bar) {
+    public static int getBossBarColor(BossEvent bar) {
         return switch (bar.getColor()) {
             case PINK -> 0xEC00B8;
             case BLUE -> 0x00B7EC;
@@ -311,19 +290,34 @@ public class AttributeHelpers {
         };
     }
 
-    public static double getRelativeYaw(Vec3d player, Vec3d other) {
-        return MathHelper.wrapDegrees(CLIENT.player.getYaw() - Math.toDegrees( MathHelper.atan2(-(other.getX() - player.getX()), other.getZ() - player.getZ()) ));
-    }
-    public static double getRelativePitch(Vec3d player, Vec3d other) {
-        double xDist = other.getX() - player.getX();
-        double zDist = other.getZ() - player.getZ();
-        return MathHelper.wrapDegrees(CLIENT.player.getPitch() + Math.toDegrees( MathHelper.atan2(other.getY() - player.getY(), Math.sqrt(xDist*xDist + zDist*zDist ) )));
+    public static int getBossBarTextColor(BossEvent bar) {
+        return switch (bar.getColor().getFormatting()) {
+            case DARK_BLUE -> 0x0000AA;
+            case DARK_GREEN -> 0x00AA00;
+            case DARK_RED -> 0xAA0000;
+            case DARK_PURPLE -> 0xAA00AA;
+            case BLUE -> 0x5555FF;
+            case RED -> 0xFF5555;
+            case GREEN -> 0x55FF55;
+            case YELLOW -> 0xFFFF55;
+            case LIGHT_PURPLE -> 0xFF55FF;
+            case WHITE -> 0xFFFFFF;
+            default -> 0xFFFFFF;
+        };
     }
 
-    public static boolean isFabricRP(ResourcePackProfile pack) {
-        TextContent content = pack.getDisplayName().getContent();
-        return pack.getName().equals("fabric") ||
-                content instanceof TranslatableTextContent ttc && (ttc.getKey().equals("pack.name.fabricMod") || ttc.getKey().equals("pack.name.fabricMods"));
+    public static double getRelativeYaw(Vec3 player, Vec3 other) {
+        return Mth.wrapDegrees(CLIENT.player.getYRot() - Math.toDegrees( Mth.atan2(-(other.x() - player.x()), other.z() - player.z()) ));
+    }
+    public static double getRelativePitch(Vec3 player, Vec3 other) {
+        double xDist = other.x() - player.x();
+        double zDist = other.z() - player.z();
+        return Mth.wrapDegrees(CLIENT.player.getXRot() + Math.toDegrees( Mth.atan2(other.y() - player.y(), Math.sqrt(xDist*xDist + zDist*zDist ) )));
+    }
+
+    public static boolean isFabricRP(Pack pack) {
+        ComponentContents content = pack.location().title().getContents();
+        return pack.getId().equals("fabric") || content instanceof TranslatableContents ttc && (ttc.getKey().equals("pack.name.fabricMod") || ttc.getKey().equals("pack.name.fabricMods"));
     }
 
 }

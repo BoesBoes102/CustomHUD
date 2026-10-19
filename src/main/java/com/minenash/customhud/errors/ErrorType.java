@@ -1,7 +1,9 @@
 package com.minenash.customhud.errors;
 
-import net.minecraft.text.*;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.*;
 
 //TODO: Add WIP with update docs
 public enum ErrorType {
@@ -73,26 +75,29 @@ public enum ErrorType {
     MALFORMED_BAR ("WIP", "references/v4_wip", "Malformed bar variable: §e"),
     MALFORMED_LOOP ("WIP", "references/v4_wip", "Malformed loop: §e"),
     MALFORMED_TIMER ("WIP", "references/v4_wip", "Malformed timer: §e"),
+    MALFORMED_VELOCITY ("WIP", "references/v4_wip", "Invalid velocity option(s): §e"),
+    MALFORMED_VELOCITY_SMOOTHING ("WIP", "references/v4_wip", "Malformed velocity smoothing: §e"),
     EMPTY_TOGGLE ("WIP", "references/v4_wip", "No toggle name"),
     UNKNOWN_KEY("WIP", "references/v4_wip", "Invalid key name: §e"),
     GIZMO_NO_ROTATE("WIP", "references/v4_wip", "Gizmo can't be rotated"),
+    GIZMO_NO_WORK("WIP", "references/v4_wip", "Due to changes in 1.21.6, {gizmo} no longer works"),
 
     NOT_A_WHOLE_NUMBER (null, null, "Not a whole number: §e"),
 
     REQUIRES_MODMENU ("Get Mod Menu", "https://modrinth.com/mod/modmenu", "Requires the mod §aMod Menu");
 
     public final String message;
-    public final MutableText linkText;
+    public final MutableComponent linkText;
     public final String link;
 
     ErrorType(String linkText, String link, String msg) {
         this.message = msg;
-        this.linkText = linkText == null ? null : Text.literal(linkText).formatted(Formatting.AQUA, Formatting.UNDERLINE);
+        this.linkText = linkText == null ? null : Component.literal(linkText).withStyle(ChatFormatting.AQUA, ChatFormatting.UNDERLINE);
         this.link = "https://customhud.dev/v4/" + link;
     }
     ErrorType(String linkText, String link, String msg, boolean directLink) {
         this.message = msg;
-        this.linkText = linkText == null ? null : Text.literal(linkText).formatted(Formatting.AQUA, Formatting.UNDERLINE);
+        this.linkText = linkText == null ? null : Component.literal(linkText).withStyle(ChatFormatting.AQUA, ChatFormatting.UNDERLINE);
         this.link = directLink ? link : "https://customhud.dev/v4/" + link;
     }
 }

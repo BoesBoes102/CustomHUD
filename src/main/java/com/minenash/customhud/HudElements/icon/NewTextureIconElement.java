@@ -1,23 +1,23 @@
 package com.minenash.customhud.HudElements.icon;
 
 import com.minenash.customhud.CustomHud;
-import com.minenash.customhud.HudElements.interfaces.ExecuteElement;
 import com.minenash.customhud.conditionals.ExpressionParser;
 import com.minenash.customhud.conditionals.Operation;
 import com.minenash.customhud.data.Flags;
 import com.minenash.customhud.render.RenderPiece;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.resource.Resource;
-import net.minecraft.util.Identifier;
-
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.NativeImage;
 import java.io.IOException;
 import java.util.Optional;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.packs.resources.Resource;
 
 public class NewTextureIconElement extends IconElement {
-    private static final MinecraftClient client = MinecraftClient.getInstance();
-    private static final Identifier TEXTURE_NOT_FOUND = new Identifier("textures/item/barrier.png");
+    private static final Minecraft client = Minecraft.getInstance();
+    private static final Identifier TEXTURE_NOT_FOUND = Identifier.parse("textures/item/barrier.png");
 
     private final Identifier texture;
     private final Operation u;
@@ -29,22 +29,24 @@ public class NewTextureIconElement extends IconElement {
     private final Operation width;
     private final Operation height;
     private final int textWidth;
+    private final RenderPipeline pipeline;
 
     private final boolean iconAvailable;
 
 
-    public NewTextureIconElement(Identifier texture, Operation u, Operation v, Operation w, Operation h, Operation width, Operation height, Flags flags) {
+    public NewTextureIconElement(Identifier texture, Operation u, Operation v, Operation w, Operation h, Operation width, Operation height, boolean crosshair, Flags flags) {
         super(flags, 0);
         this.u = u != null ? u : new Operation.Literal(0);
         this.v = v != null ? v : new Operation.Literal(0);
         this.width = width;
         this.height = height;
+        this.pipeline = crosshair? RenderPipelines.CROSSHAIR : RenderPipelines.GUI_TEXTURED;
 
         NativeImage img = null;
         try {
             Optional<Resource> resource = client.getResourceManager().getResource(texture);
             if (resource.isPresent())
-                img = NativeImage.read(resource.get().getInputStream());
+                img = NativeImage.read(resource.get().open());
         }
         catch (IOException e) { CustomHud.LOGGER.catching(e); }
 
@@ -87,14 +89,14 @@ public class NewTextureIconElement extends IconElement {
     }
 
     @Override
-    public void render(DrawContext context, RenderPiece piece) {
+    public void render(GuiGraphicsExtractor context, RenderPiece piece) {
         if (calcWidth == 0 || calcHeight == 0)
             return;
-        context.getMatrices().push();
-        context.getMatrices().translate(piece.x+shiftX, piece.y+shiftY-2 - (referenceCorner? 0 : (calcHeight*scale-calcHeight)/(scale*2)), 0);
-        rotate(context.getMatrices(), calcWidth, calcHeight);
-        context.drawTexture(texture, 0, 0, calcWidth, calcHeight, calcU, calcV, (int) calcRegionWidth, (int) calcRegionHeight, textureWidth, textureHeight);
-        context.getMatrices().pop();
+        context.pose().pushMatrix();
+        context.pose().translate(piece.x+shiftX, piece.y+shiftY-2 - (referenceCorner? 0 : (calcHeight*scale-calcHeight)/(scale*2)));
+        rotate(context.pose(), calcWidth, calcHeight);
+        context.blit(pipeline, texture, 0, 0,  calcU, calcV, calcWidth, calcHeight, (int) calcRegionWidth, (int) calcRegionHeight, textureWidth, textureHeight);
+        context.pose().popMatrix();
     }
 
     int calcU = 0;

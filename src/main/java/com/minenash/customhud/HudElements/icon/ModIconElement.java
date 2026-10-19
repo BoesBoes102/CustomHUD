@@ -1,18 +1,18 @@
 package com.minenash.customhud.HudElements.icon;
 
-import com.minenash.customhud.HudElements.list.ListProvider;
 import com.minenash.customhud.data.Flags;
 import com.minenash.customhud.render.RenderPiece;
 import com.terraformersmc.modmenu.util.mod.Mod;
 import com.terraformersmc.modmenu.util.mod.fabric.FabricIconHandler;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.texture.NativeImageBackedTexture;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.Identifier;
+import org.joml.Matrix3x2fStack;
 
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.resources.Identifier;
 
 import static com.minenash.customhud.CustomHud.CLIENT;
 
@@ -30,35 +30,34 @@ public class ModIconElement extends IconElement {
     }
 
     @Override
-    public void render(DrawContext context, RenderPiece piece) {
+    public void render(GuiGraphicsExtractor context, RenderPiece piece) {
         Mod mod = (Mod) piece.value;
-        int size = (int)(10 * scale * CLIENT.options.getGuiScale().getValue());
+        int size = (int)(10 * scale * CLIENT.options.guiScale().get());
 
-        Identifier id = new Identifier("custom_hud", size + "___" + mod.getId());
+        Identifier id = Identifier.fromNamespaceAndPath("custom_hud", size + "___" + mod.getId());
 
         if (!cached.contains(id)) {
             try {
-                NativeImageBackedTexture icon = mod.getIcon(handler, size);
-                CLIENT.getTextureManager().registerTexture(id, icon);
+                DynamicTexture icon = mod.getIcon(handler, size);
+                CLIENT.getTextureManager().register(id, icon);
                 cached.add(id);
             }
             catch (Exception e) {
-                id = new Identifier("textures/misc/unknown_pack.png");
+                id = Identifier.parse("textures/misc/unknown_pack.png");
             }
         }
 
-        MatrixStack matrices = context.getMatrices();
-        matrices.push();
-        matrices.translate(piece.x + shiftX, piece.y + shiftY - 2, 0);
+        Matrix3x2fStack matrices = context.pose();
+        matrices.pushMatrix();
+        matrices.translate(piece.x + shiftX, piece.y + shiftY - 2);
         if (!referenceCorner)
-            matrices.translate(0, -(11*scale-11)/2F, 0);
+            matrices.translate(0, -(11*scale-11)/2F);
 //        matrices.scale(scale, scale, 0);
         int w = (int) (11 * scale);
         rotate(matrices, w, w);
 
-
-        context.drawTexture(id, 0, 0, 0, 0, w, w, w, w);
-        matrices.pop();
+        context.blit(RenderPipelines.GUI_TEXTURED, id, 0, 0, 0, 0, w, w, w, w);
+        matrices.popMatrix();
     }
 
 }
